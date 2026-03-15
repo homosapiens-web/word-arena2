@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* 自定義動畫 */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes slideInDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -21,16 +20,18 @@
         .animate-slide-down { animation: slideInDown 0.4s ease-out forwards; }
         .animate-zoom-in { animation: zoomIn 0.3s ease-out forwards; }
         
-        /* 隱藏捲軸 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-[#0f172a] text-white font-sans selection:bg-indigo-500/30 min-h-screen relative pb-20">
 
-    <!-- 全域載入畫面 (升級防卡死機制) -->
+    <!-- 全域通知容器 -->
+    <div id="toast-container" class="fixed top-16 left-1/2 transform -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none w-[90%] max-w-sm"></div>
+
+    <!-- 全域載入畫面 (防卡死機制) -->
     <div id="global-loading" class="fixed inset-0 bg-[#0f172a] z-[100] flex flex-col items-center justify-center gap-4 transition-opacity duration-300">
-        <div id="loading-spinner-container" class="relative">
+        <div class="relative">
             <i id="loading-spinner" class="fas fa-spinner fa-spin text-6xl text-indigo-500"></i>
         </div>
         <p id="loading-text" class="text-xl font-bold tracking-wider mt-4">正在連線至伺服器...</p>
@@ -43,36 +44,45 @@
     <!-- 頂部導航 -->
     <header class="bg-[#1e293b] p-4 border-b border-slate-700/50 flex justify-between items-center sticky top-0 z-50 shadow-md">
         <h1 class="text-xl font-black flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-            <i class="fas fa-layer-group text-indigo-400"></i> 單字大亂鬥 Word Arena
+            <i class="fas fa-layer-group text-indigo-400"></i> 單字大亂鬥 <span class="text-xs text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-500/30">AI百科版</span>
         </h1>
         <div class="text-xs text-slate-300">
-            目前收集卡牌: <span id="total-cards-count" class="font-bold text-white text-sm">0</span> 張
+            收集: <span id="total-cards-count" class="font-bold text-white text-sm">0</span> 張
         </div>
     </header>
+
+    <!-- 卡牌詳細資訊 Modal -->
+    <div id="card-modal" class="hidden fixed inset-0 z-[150] bg-[#0f172a]/90 backdrop-blur-md flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-[#1e293b] border border-slate-600 rounded-3xl w-full max-w-md p-6 shadow-2xl animate-zoom-in relative max-h-[90vh] overflow-y-auto no-scrollbar">
+            <button onclick="closeCardModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+            <div id="card-modal-content" class="flex flex-col items-center pt-4">
+                <!-- 內容由 JS 動態生成 -->
+            </div>
+        </div>
+    </div>
 
     <!-- 主視圖區塊 -->
     <main class="max-w-4xl mx-auto p-4 relative w-full h-full min-h-[calc(100vh-140px)]">
         
         <!-- 視圖 1: 猜單字 (Hangman) -->
         <div id="view-hangman" class="animate-fade-in w-full">
-            <div id="hangman-container" class="flex flex-col items-center justify-center max-w-lg mx-auto w-full">
-                <!-- 內容由 JS 渲染 -->
-            </div>
+            <div id="hangman-container" class="flex flex-col items-center justify-center max-w-lg mx-auto w-full"></div>
         </div>
 
         <!-- 視圖 2: 卡牌庫 (Library) -->
         <div id="view-library" class="hidden animate-fade-in w-full">
-            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2 text-slate-100"><i class="fas fa-book-open text-indigo-400"></i> 卡牌庫</h2>
-            <div id="library-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 justify-items-center pb-8">
-                <!-- 卡牌由 JS 渲染 -->
+            <div class="flex justify-between items-end mb-6">
+                <h2 class="text-2xl font-bold flex items-center gap-2 text-slate-100"><i class="fas fa-book-open text-indigo-400"></i> 卡牌庫</h2>
+                <span class="text-xs text-slate-400">點擊卡牌查看百科解釋</span>
             </div>
+            <div id="library-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 justify-items-center pb-8"></div>
         </div>
 
         <!-- 視圖 3: 競技場 (Arena) -->
         <div id="view-arena" class="hidden animate-fade-in w-full">
-            <div id="arena-container" class="w-full">
-                <!-- 內容由 JS 渲染 -->
-            </div>
+            <div id="arena-container" class="w-full"></div>
         </div>
 
     </main>
@@ -100,7 +110,7 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- 1. 全域狀態與防卡死機制 ---
+        // --- 全域狀態 ---
         let app, auth, db, appId;
         
         const State = {
@@ -120,13 +130,26 @@
             forceBtn: document.getElementById('force-start-btn')
         };
 
-        // 8秒後顯示強制進入按鈕 (防卡死)
+        // --- 輔助：Toast 提示 ---
+        window.showToast = function(msg, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `px-6 py-3 rounded-full shadow-2xl border animate-slide-down flex items-center gap-2 text-sm font-bold w-full justify-center ${isError ? 'bg-rose-900/90 border-rose-600 text-rose-100' : 'bg-slate-800 border-slate-600 text-white'}`;
+            toast.innerHTML = `<i class="fas ${isError ? 'fa-exclamation-triangle text-rose-400' : 'fa-info-circle text-indigo-400'}"></i> ${msg}`;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => {
+                toast.classList.replace('animate-slide-down', 'opacity-0');
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- 防卡死機制 ---
         let initTimeout = setTimeout(() => {
             if (!State.user && !State.isOfflineMode) {
                 uiElements.loadingSpinner.className = "fas fa-wifi text-6xl text-yellow-500 animate-pulse";
                 uiElements.loadingText.innerText = "連線似乎受到阻擋";
                 uiElements.loadingText.className = "text-xl font-bold mt-4 text-yellow-400";
-                uiElements.loadingSubtext.innerText = "可能受阻擋廣告套件影響，或是缺少伺服器環境。您可以先進入單機模式遊玩！";
+                uiElements.loadingSubtext.innerText = "可能受擋廣告套件影響，或是缺少伺服器環境。您可以先進入單機模式遊玩！";
                 uiElements.loadingSubtext.classList.remove('hidden');
                 uiElements.forceBtn.classList.remove('hidden');
             }
@@ -134,53 +157,46 @@
 
         uiElements.forceBtn.onclick = () => {
             clearTimeout(initTimeout);
-            enableOfflineMode("已切換為單機模式。您的卡牌將儲存於瀏覽器中，但無法進行多人連線對戰。");
+            enableOfflineMode();
         };
 
-        function enableOfflineMode(msg) {
+        function enableOfflineMode() {
             State.isOfflineMode = true;
             uiElements.loadingContainer.classList.add('opacity-0');
             setTimeout(() => uiElements.loadingContainer.classList.add('hidden'), 300);
             
             State.user = { uid: 'local_user' };
-            
-            // 讀取 LocalStorage 卡牌
             try {
                 const localCards = JSON.parse(localStorage.getItem('wordArenaCards') || '[]');
                 State.cards = localCards;
             } catch(e) { State.cards = []; }
             
-            if(msg) alert(msg);
+            showToast("已切換為單機模式。卡牌將儲存於您的瀏覽器中。");
             updateUI();
             initHangmanGame();
         }
 
-        // --- 2. 初始化 Firebase ---
+        // --- 初始化 Firebase ---
         async function initApp() {
             try {
                 let configObj = {};
-                // 防錯處理：檢查設定檔是否存在且格式正確
                 if (typeof __firebase_config !== 'undefined') {
                     configObj = typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config;
                 }
                 
-                if (!configObj || Object.keys(configObj).length === 0) {
-                    throw new Error("無效的 Firebase 設定檔");
-                }
+                if (!configObj || Object.keys(configObj).length === 0) throw new Error("無效的 Firebase 設定檔");
 
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'hangman-card-battler';
                 app = initializeApp(configObj);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // 登入
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
 
-                // 綁定狀態監聽
                 onAuthStateChanged(auth, (user) => {
                     if (user && !State.isOfflineMode) {
                         clearTimeout(initTimeout);
@@ -188,7 +204,6 @@
                         uiElements.loadingContainer.classList.add('opacity-0');
                         setTimeout(() => uiElements.loadingContainer.classList.add('hidden'), 300);
                         
-                        // 監聽雲端卡牌
                         const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
                         onSnapshot(cardsRef, (snapshot) => {
                             const loadedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -197,8 +212,6 @@
                             updateUI();
                             if (State.activeTab === 'library') renderLibrary();
                             if (State.activeTab === 'arena' && State.arena.view === 'deck_select') renderArena();
-                        }, (err) => {
-                            console.error("Firestore Error:", err);
                         });
 
                         initHangmanGame();
@@ -206,47 +219,124 @@
                 });
 
             } catch (err) {
-                console.error("Firebase Init Error:", err);
                 clearTimeout(initTimeout);
                 uiElements.loadingSpinner.className = "fas fa-exclamation-triangle text-6xl text-red-500";
                 uiElements.loadingText.innerText = "無法連接伺服器";
-                uiElements.loadingText.className = "text-xl font-bold mt-4 text-red-400";
                 uiElements.loadingSubtext.innerText = err.message;
                 uiElements.loadingSubtext.classList.remove('hidden');
                 uiElements.forceBtn.classList.remove('hidden');
             }
         }
 
-        // --- 3. 核心翻譯 ---
-        async function fetchWordDetails(word) {
+        // --- ★ 核心升級：AI 與百科查詢引擎 ★ ---
+        window.fetchWordDetails = async function(word) {
+            const apiKey = ""; // 執行環境會自動注入
+            
+            // 1. 優先使用 Gemini AI 結合 Google 搜尋
+            if (apiKey) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{ parts: [{ text: `請查詢英文單字或詞彙 '${word}'。如果是專有名詞、品牌縮寫或冷門字，請結合 Google 搜尋與維基百科給出準確且生動的解釋。` }] }],
+                        systemInstruction: { parts: [{ text: "你是一個專業字典與百科全書API。請務必回傳純 JSON 格式。包含欄位：translation(簡短繁體中文翻譯，最長6個字), explanation(詳細的繁體中文解釋，包含字義、來源或百科背景介紹，約30-80字), isRare(是否為專有名詞或罕見字, true/false), cefr(單字難度 'A1'~'C2' 或 '???')" }] },
+                        tools: [{ google_search: {} }],
+                        generationConfig: { responseMimeType: "application/json", responseSchema: { type: "OBJECT", properties: { translation: { type: "STRING" }, explanation: { type: "STRING" }, isRare: { type: "BOOLEAN" }, cefr: { type: "STRING" } } } }
+                    };
+
+                    const fetchWithRetry = async (url, options, retries = 3) => {
+                        const delays = [1000, 2000, 4000];
+                        for (let i = 0; i < retries; i++) {
+                            try {
+                                const res = await fetch(url, options);
+                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                return await res.json();
+                            } catch (err) {
+                                if (i === retries - 1) throw err;
+                                await new Promise(r => setTimeout(r, delays[i]));
+                            }
+                        }
+                    };
+
+                    const data = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        const result = JSON.parse(text);
+                        return {
+                            translation: result.translation || "未知",
+                            explanation: result.explanation || "暫無詳細解釋",
+                            isRare: !!result.isRare,
+                            cefr: result.cefr || "???"
+                        };
+                    }
+                } catch (e) {
+                    console.warn("Gemini API 查詢失敗，切換至備用百科字典方案:", e);
+                }
+            }
+
+            // 2. 備用方案：維基百科 + Dictionary API + MyMemory
             let translation = "未知";
+            let explanation = "";
             let isRare = false;
             let cefr = "A1";
 
             try {
-                const res = await fetch(`https://api.mymemory.translated.net/get?q=${word}&langpair=en|zh-TW`);
-                const data = await res.json();
-                if (data && data.responseData && data.responseData.translatedText) {
-                    translation = data.responseData.translatedText;
-                    if (translation.toLowerCase() === word.toLowerCase() || translation.includes("MYMEMORY")) {
-                        translation = "稀有詞彙(無翻譯)";
-                        isRare = true;
+                // 先查維基百科 (針對專有名詞)
+                const wikiRes = await fetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=2&explaintext=1&titles=${word}&format=json&origin=*`);
+                const wikiData = await wikiRes.json();
+                const pages = wikiData.query?.pages;
+                const pageId = pages ? Object.keys(pages)[0] : "-1";
+                
+                if (pageId !== "-1" && pages[pageId].extract) {
+                    explanation = `【維基百科】${pages[pageId].extract}`;
+                    translation = pages[pageId].title;
+                    isRare = true;
+                    cefr = "???";
+                } else {
+                    // 查 MyMemory 翻譯
+                    const transRes = await fetch(`https://api.mymemory.translated.net/get?q=${word}&langpair=en|zh-TW`);
+                    const transData = await transRes.json();
+                    if (transData?.responseData?.translatedText) {
+                        translation = transData.responseData.translatedText;
+                        if (translation.toLowerCase() === word.toLowerCase() || translation.includes("MYMEMORY")) {
+                            translation = "查無翻譯";
+                            isRare = true;
+                        }
                     }
-                } else { isRare = true; }
+                    
+                    // 查 Dictionary API (英文原意)
+                    if (!isRare || translation === "查無翻譯") {
+                        try {
+                            const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+                            if(dictRes.ok) {
+                                const dictData = await dictRes.json();
+                                if (dictData?.[0]?.meanings?.[0]?.definitions?.[0]) {
+                                    const enDef = dictData[0].meanings[0].definitions[0].definition;
+                                    explanation = `中文翻譯為「${translation !== "查無翻譯" ? translation : '未知'}」。\n【英英字典】${enDef}`;
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                }
+                
+                if(!explanation) explanation = `中文翻譯大約為「${translation}」。網路字典中無更詳細的百科資料。`;
+                
             } catch (e) {
-                translation = "稀有詞彙(無翻譯)";
+                translation = "查無翻譯";
+                explanation = "網路或伺服器異常，無法連接字典與維基百科。";
                 isRare = true;
+                cefr = "???";
+            }
+            
+            // 計算預設難度
+            if(cefr === "A1" && !isRare) {
+                 const l = word.length;
+                 if (l <= 4) cefr = "A1"; else if (l === 5) cefr = "A2"; else if (l === 6) cefr = "B1"; else if (l === 7) cefr = "B2"; else if (l === 8) cefr = "C1"; else cefr = "C2";
             }
 
-            if (isRare) cefr = "???";
-            else {
-                const l = word.length;
-                if (l <= 4) cefr = "A1"; else if (l === 5) cefr = "A2"; else if (l === 6) cefr = "B1"; else if (l === 7) cefr = "B2"; else if (l === 8) cefr = "C1"; else cefr = "C2";
-            }
-            return { translation, isRare, cefr };
-        }
+            return { translation, explanation, isRare, cefr };
+        };
 
-        // --- 4. 產生卡牌 HTML ---
+        // --- 產生卡牌 HTML ---
         window.generateCardHTML = function(card, hideDetails = false) {
             if (hideDetails) {
                 return `<div class="bg-[#1e293b] border border-slate-600 rounded-xl p-4 w-full h-full min-h-[200px] flex items-center justify-center shadow-lg relative overflow-hidden aspect-[3/4]">
@@ -265,26 +355,17 @@
             const theme = rarityColors[card.stars] || rarityColors[1];
 
             let starsHTML = '';
-            for(let i=0; i<5; i++) {
-                starsHTML += `<i class="fas fa-star text-[12px] ${i < card.stars ? 'text-yellow-400 drop-shadow-md' : 'text-slate-600/50'}"></i>`;
-            }
+            for(let i=0; i<5; i++) starsHTML += `<i class="fas fa-star text-[12px] ${i < card.stars ? 'text-yellow-400 drop-shadow-md' : 'text-slate-600/50'}"></i>`;
 
             return `
             <div class="relative bg-gradient-to-br ${theme} border-2 rounded-xl p-4 w-full aspect-[3/4] flex flex-col items-center shadow-xl overflow-hidden shrink-0">
-                <!-- 星星 -->
                 <div class="flex gap-1 mt-1 mb-2">${starsHTML}</div>
-                
-                <!-- 單字 -->
                 <h3 class="font-bold tracking-wider text-white text-center break-words w-full px-1 uppercase my-auto drop-shadow-md ${card.word.length > 8 ? 'text-2xl' : 'text-3xl'}">
                     ${card.word}
                 </h3>
-                
-                <!-- 翻譯 -->
                 <div class="text-center w-full mt-auto mb-4 flex flex-col items-center">
                     <p class="text-sm text-slate-300 line-clamp-2 px-1 font-medium">${card.translation}</p>
                 </div>
-
-                <!-- 戰鬥數值 -->
                 <div class="bg-[#0f172a]/80 w-full rounded-lg p-2 flex justify-between items-center text-base font-bold backdrop-blur-sm border border-white/5 mt-auto shadow-inner">
                     <div class="flex items-center gap-1 text-rose-400"><i class="fas fa-heart text-sm"></i> ${card.hp}</div>
                     <div class="flex items-center gap-1 text-indigo-300"><i class="fas fa-khanda text-sm"></i> ${card.atk}</div>
@@ -292,7 +373,7 @@
             </div>`;
         }
 
-        // --- 5. UI 更新 ---
+        // --- UI 更新與切換 ---
         window.switchTab = function(tabId) {
             if(tabId === 'arena' && State.cards.length < 4) return;
             
@@ -333,12 +414,40 @@
             if (unseenCount > 0 && State.activeTab !== 'library') {
                 badge.innerText = unseenCount;
                 badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
+            } else { badge.classList.add('hidden'); }
         }
 
-        // --- 6. 遊戲邏輯 (還原截圖UI) ---
+        // --- 卡牌百科彈窗 ---
+        window.showCardDetails = function(cardId) {
+            const card = State.cards.find(c => c.id === cardId);
+            if(!card) return;
+            
+            document.getElementById('card-modal').classList.remove('hidden');
+            document.getElementById('card-modal-content').innerHTML = `
+                <div class="w-48 mx-auto mb-6 transform hover:scale-105 transition-transform duration-300">
+                    ${generateCardHTML(card)}
+                </div>
+                <div class="w-full bg-[#0f172a] rounded-2xl p-5 text-left border border-slate-700 shadow-inner">
+                    <h4 class="text-indigo-400 font-bold mb-3 flex items-center gap-2 text-lg">
+                        <i class="fas fa-book-journal-whills"></i> 百科與字義解釋
+                    </h4>
+                    <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">${card.explanation || '暫無詳細解釋'}</p>
+                    
+                    <div class="mt-5 pt-4 border-t border-slate-700/50 flex justify-between items-center">
+                        <div class="bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-lg text-xs font-bold border border-indigo-500/20">
+                            評級: ${card.cefr || '???'}
+                        </div>
+                        <span class="text-xs text-slate-500 font-medium"><i class="far fa-clock"></i> 獲取於 ${new Date(card.createdAt).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.closeCardModal = function() {
+            document.getElementById('card-modal').classList.add('hidden');
+        }
+
+        // --- 猜單字邏輯 ---
         window.initHangmanGame = async function() {
             State.hangman.status = 'loading';
             State.hangman.guessed = [];
@@ -349,12 +458,13 @@
 
             try {
                 let newWord = "";
+                // 為了增加趣味，混用不同字庫（可產生一般字與專有名詞）
                 if(Math.random() > 0.4) {
-                    const topics = ["animals", "technology", "sports", "food", "nature", "science"];
+                    const topics = ["animals", "technology", "sports", "science", "astronomy", "movies"];
                     const topic = topics[Math.floor(Math.random() * topics.length)];
                     const res = await fetch(`https://api.datamuse.com/words?ml=${topic}&max=50`);
                     const data = await res.json();
-                    const valid = data.filter(d => d.word.length >= 4 && d.word.length <= 8 && /^[a-zA-Z]+$/.test(d.word));
+                    const valid = data.filter(d => d.word.length >= 4 && d.word.length <= 9 && /^[a-zA-Z]+$/.test(d.word));
                     newWord = valid[Math.floor(Math.random() * valid.length)].word.toUpperCase();
                 } else {
                     const len = Math.floor(Math.random() * 5) + 4;
@@ -366,7 +476,7 @@
                 State.hangman.status = 'playing';
                 renderHangman();
             } catch (err) {
-                State.hangman.word = 'ARENA';
+                State.hangman.word = 'WIKIPEDIA'; // Fallback
                 State.hangman.status = 'playing';
                 renderHangman();
             }
@@ -398,7 +508,7 @@
             renderHangman();
             
             const word = State.hangman.word.toLowerCase();
-            const details = await fetchWordDetails(word);
+            const details = await fetchWordDetails(word); // ★ 呼叫超強 AI 百科解析
             State.hangman.details = details;
             
             const length = word.length;
@@ -407,7 +517,7 @@
             const stars = details.isRare ? 5 : Math.min(5, Math.max(1, Math.floor(length / 2)));
             
             const cardData = {
-                word: State.hangman.word, translation: details.translation, cefr: details.cefr,
+                word: State.hangman.word, translation: details.translation, explanation: details.explanation, cefr: details.cefr,
                 hp, atk, stars, isRare: details.isRare,
                 createdAt: Date.now(), isNew: true
             };
@@ -419,7 +529,7 @@
                     try {
                         const cardsRef = collection(db, 'artifacts', appId, 'users', State.user.uid, 'cards');
                         await addDoc(cardsRef, cardData);
-                    } catch (e) { console.error("Firestore Save Error:", e); }
+                    } catch (e) { showToast("雲端存檔失敗", true); }
                 } else {
                     cardData.id = Date.now().toString();
                     State.cards.push(cardData);
@@ -438,9 +548,10 @@
 
             if (hs.status === 'loading' || hs.status === 'saving') {
                 container.innerHTML = `
-                    <div class="flex flex-col items-center my-20 animate-fade-in">
-                        <i class="fas fa-spinner fa-spin text-indigo-500 mb-4 text-5xl"></i>
-                        <p class="text-indigo-300 font-bold">${hs.status === 'saving' ? '正在解析詞彙與計算能力值...' : '尋找下一個單字...'}</p>
+                    <div class="flex flex-col items-center my-20 animate-fade-in text-center">
+                        <i class="fas ${hs.status === 'saving' ? 'fa-magnifying-glass' : 'fa-spinner fa-spin'} text-indigo-500 mb-6 text-6xl"></i>
+                        <p class="text-indigo-300 font-bold text-lg mb-2">${hs.status === 'saving' ? '正在搜尋網路百科與翻譯庫...' : '尋找下一個單字...'}</p>
+                        ${hs.status === 'saving' ? '<p class="text-slate-400 text-sm">這可能需要幾秒鐘的時間</p>' : ''}
                     </div>`;
                 return;
             }
@@ -476,47 +587,50 @@
                     <div class="w-full flex flex-col items-center animate-fade-in px-2">
                         <div class="mb-6 w-full flex flex-col items-center">
                             ${hangmanSVG}
-                            <div class="text-rose-400 font-bold bg-rose-900/20 px-4 py-1.5 rounded-full border border-rose-900 mt-2 text-sm">
-                                剩餘生命: ${hs.maxMistakes - hs.mistakes}
-                            </div>
+                            <div class="text-rose-400 font-bold bg-rose-900/20 px-4 py-1.5 rounded-full border border-rose-900 mt-2 text-sm">剩餘生命: ${hs.maxMistakes - hs.mistakes}</div>
                         </div>
-                        <div class="mb-10 text-center flex flex-wrap justify-center gap-y-6">
-                            ${wordHTML}
-                        </div>
-                        <div class="grid grid-cols-7 gap-1.5 sm:gap-2 w-full max-w-lg mb-4">
-                            ${keysHTML}
-                        </div>
+                        <div class="mb-10 text-center flex flex-wrap justify-center gap-y-6">${wordHTML}</div>
+                        <div class="grid grid-cols-7 gap-1.5 sm:gap-2 w-full max-w-lg mb-4">${keysHTML}</div>
                     </div>`;
                 return;
             }
 
-            // 完美還原截圖的結算畫面排版
+            // 結算畫面 (顯示百科知識)
             if (hs.status === 'won' || hs.status === 'lost') {
                 const isWon = hs.status === 'won';
                 
                 let titleHTML = isWon 
-                    ? `<h2 class="text-3xl font-black mb-1 text-emerald-400 flex items-center justify-center gap-2">🎉 挑戰成功！</h2>
-                       <p class="text-emerald-300 text-sm mb-6">你獲得了一張新卡牌！</p>`
-                    : `<h2 class="text-3xl font-black mb-1 text-rose-500 flex items-center justify-center gap-2">💀 遊戲結束</h2>
-                       <p class="text-slate-400 text-sm mb-6">小人被吊死了，下次再接再厲！</p>`;
+                    ? `<h2 class="text-3xl font-black mb-1 text-emerald-400 flex items-center justify-center gap-2">🎉 挑戰成功！</h2><p class="text-emerald-300 text-sm mb-6">你獲得了一張新卡牌！</p>`
+                    : `<h2 class="text-3xl font-black mb-1 text-rose-500 flex items-center justify-center gap-2">💀 遊戲結束</h2><p class="text-slate-400 text-sm mb-6">小人被吊死了，下次再接再厲！</p>`;
 
                 let cardOrContentHTML = '';
                 if (isWon && hs.newCard) {
-                    cardOrContentHTML = `<div class="w-full max-w-[240px] mb-8 animate-slide-up">${generateCardHTML(hs.newCard)}</div>`;
+                    cardOrContentHTML = `
+                        <div class="w-full max-w-[220px] mb-6 animate-slide-up cursor-pointer hover:scale-105 transition-transform" onclick="showCardDetails('${hs.newCard.id || 'preview'}')">
+                            ${generateCardHTML(hs.newCard)}
+                        </div>
+                        <div class="bg-[#1e293b] p-4 rounded-xl border border-slate-600 mb-8 text-left w-full max-w-sm animate-zoom-in shadow-lg relative">
+                            <span class="absolute -top-3 left-4 bg-[#0f172a] px-2 text-xs font-bold text-indigo-400 border border-slate-600 rounded-full">📝 網路百科解析</span>
+                            <p class="text-slate-300 text-sm mt-1 leading-relaxed">${hs.details.explanation}</p>
+                        </div>
+                    `;
                 } else if (!isWon) {
                     cardOrContentHTML = `
-                        <div class="bg-[#e8f5e9] text-slate-800 rounded-2xl p-6 w-full max-w-sm mb-8 border border-emerald-200 text-center animate-zoom-in shadow-lg">
-                            <p class="text-emerald-700 font-bold text-sm mb-2">答案單字：</p>
-                            <p class="text-4xl font-black tracking-widest text-[#1e293b] mb-4">${hs.word}</p>
-                            <div class="h-px w-full bg-emerald-200 mb-4"></div>
-                            <p class="text-emerald-700 font-bold text-sm mb-1">中文解釋：</p>
-                            <p class="text-slate-600 font-medium">${hs.details ? (hs.details.isRare ? '(這是一個非常罕見的單字，翻譯字庫未收錄)' : hs.details.translation) : ''}</p>
+                        <div class="bg-[#e8f5e9] text-slate-800 rounded-3xl p-6 w-full max-w-sm mb-8 border border-emerald-300 text-center animate-zoom-in shadow-xl overflow-hidden relative">
+                            <div class="absolute top-0 right-0 bg-emerald-500 text-white text-xs px-3 py-1 rounded-bl-xl font-bold">正解</div>
+                            <p class="text-emerald-800 font-bold text-sm mb-2 mt-2">答案單字：</p>
+                            <p class="text-4xl font-black tracking-widest text-[#0f172a] mb-5">${hs.word}</p>
+                            
+                            <div class="bg-white/60 rounded-xl p-4 text-left border border-emerald-200 shadow-inner">
+                                <p class="text-emerald-700 font-bold text-xs mb-2 flex items-center gap-1"><i class="fas fa-globe"></i> 百科與網路解釋：</p>
+                                <p class="text-slate-700 font-medium text-sm leading-relaxed">${hs.details ? hs.details.explanation : '無資料'}</p>
+                            </div>
                         </div>
                     `;
                 }
 
                 container.innerHTML = `
-                    <div class="flex flex-col items-center w-full animate-fade-in mt-4">
+                    <div class="flex flex-col items-center w-full animate-fade-in mt-2">
                         ${titleHTML}
                         ${cardOrContentHTML}
                         <button onclick="initHangmanGame()" class="bg-[#5c4dff] hover:bg-[#4b3ce0] text-white font-bold py-4 px-12 rounded-full shadow-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 active:scale-95 text-lg w-full max-w-sm">
@@ -526,7 +640,7 @@
             }
         }
 
-        // --- 7. Library ---
+        // --- 卡牌庫 ---
         function renderLibrary() {
             const container = document.getElementById('library-container');
             
@@ -545,19 +659,19 @@
             updateUI(); 
 
             if (State.cards.length === 0) {
-                container.innerHTML = `<div class="col-span-full text-center text-slate-500 py-20 w-full">目前沒有卡牌。快去猜單字收集吧！</div>`;
+                container.innerHTML = `<div class="col-span-full text-center text-slate-500 py-20 w-full flex flex-col items-center"><i class="fas fa-ghost text-4xl mb-4 text-slate-700"></i>目前沒有卡牌。快去猜單字收集百科知識吧！</div>`;
                 return;
             }
 
             container.innerHTML = State.cards.map(card => `
-                <div class="w-full max-w-[180px] transform transition-transform hover:scale-105 hover:-translate-y-2 cursor-pointer relative group">
-                    ${card.isNew ? '<span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full z-20 shadow">New</span>' : ''}
+                <div class="w-full max-w-[180px] transform transition-transform hover:scale-105 hover:-translate-y-2 cursor-pointer relative group" onclick="showCardDetails('${card.id}')">
+                    ${card.isNew ? '<span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full z-20 shadow animate-pulse">New</span>' : ''}
                     ${generateCardHTML(card)}
                 </div>
             `).join('');
         }
 
-        // --- 8. Arena ---
+        // --- 競技場邏輯 ---
         window.toggleCardSelection = function(cardId) {
             const card = State.cards.find(c => c.id === cardId);
             const existsIdx = State.arena.selectedDeck.findIndex(c => c.id === cardId);
@@ -567,10 +681,7 @@
         }
 
         window.setArenaView = function(view) {
-            if(State.isOfflineMode) {
-                alert("目前為單機模式，無法進入多人連線大廳！(如欲連線請重新整理並確保網路與伺服器環境正常)");
-                return;
-            }
+            if(State.isOfflineMode) { showToast("目前為單機模式，無法進入連線大廳！", true); return; }
             State.arena.view = view;
             
             if (view === 'lobby' && !State.arena.unsubscribeMatchList && db) {
@@ -585,9 +696,7 @@
                             State.arena.matchData = myMatch;
                             if (myMatch.status === 'playing') State.arena.view = 'room';
                             if (myMatch.player1 === State.user.uid && myMatch.status === 'playing') {
-                                if (myMatch.p1State.ready && myMatch.p2State.ready && !myMatch.resolving) {
-                                    resolveRound(myMatch.id, myMatch);
-                                }
+                                if (myMatch.p1State.ready && myMatch.p2State.ready && !myMatch.resolving) resolveRound(myMatch.id, myMatch);
                             }
                         } else {
                             State.arena.matchId = null; State.arena.matchData = null; State.arena.view = 'lobby';
@@ -599,7 +708,6 @@
             renderArena();
         }
 
-        // Arena 戰鬥結算邏輯
         async function resolveRound(id, match) {
             const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', id);
             await updateDoc(matchRef, { resolving: true });
@@ -675,21 +783,16 @@
 
                 const cardsHTML = State.cards.map(card => {
                     const isSelected = State.arena.selectedDeck.find(c => c.id === card.id);
-                    return `
-                    <div onclick="toggleCardSelection('${card.id}')" class="cursor-pointer transition-all ${isSelected ? 'ring-4 ring-indigo-500 scale-95 opacity-50 rounded-xl' : 'hover:scale-105'}">
-                        ${generateCardHTML(card)}
-                    </div>`;
+                    return `<div onclick="toggleCardSelection('${card.id}')" class="cursor-pointer transition-all ${isSelected ? 'ring-4 ring-indigo-500 scale-95 opacity-50 rounded-xl' : 'hover:scale-105'}">${generateCardHTML(card)}</div>`;
                 }).join('');
 
                 container.innerHTML = `
                 <div class="animate-fade-in pb-10 w-full">
                     <h2 class="text-2xl font-black text-center mb-2 text-indigo-400">⚔️ 組建牌組</h2>
                     <p class="text-slate-400 text-sm text-center mb-6">點擊下方卡牌選擇 <strong class="text-white text-lg">${State.arena.selectedDeck.length}/4</strong> 張，進入三戰兩勝對決！</p>
-                    
                     <div class="flex justify-center gap-2 mb-6 min-h-[160px] p-4 bg-[#1e293b] rounded-2xl border border-slate-700 w-full overflow-x-auto shadow-inner no-scrollbar items-start">
                         ${State.arena.selectedDeck.length === 0 ? '<div class="text-slate-500 my-auto flex flex-col items-center"><i class="fas fa-hand-pointer text-2xl mb-2"></i>點擊下方卡牌加入</div>' : deckHTML}
                     </div>
-
                     <button onclick="setArenaView('lobby')" ${State.arena.selectedDeck.length !== 4 ? 'disabled' : ''} class="w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex justify-center items-center gap-2 mb-8 ${State.arena.selectedDeck.length === 4 ? 'bg-[#5c4dff] hover:bg-[#4b3ce0] text-white active:scale-95' : 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'}">
                         <i class="fas fa-sign-in-alt text-xl"></i> 進入對戰大廳 ${State.isOfflineMode ? '(單機模式不可用)' : ''}
                     </button>
@@ -707,9 +810,7 @@
                                 <div class="bg-[#0f172a] p-2.5 rounded-full"><i class="fas fa-spinner fa-spin text-indigo-400"></i></div>
                                 <span class="font-bold text-lg">${room.p1Name} <span class="text-slate-400 text-sm font-normal">的擂台</span></span>
                             </div>
-                            <button onclick="joinRoom('${room.id}')" class="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-lg font-bold shadow-md">
-                                加入
-                            </button>
+                            <button onclick="joinRoom('${room.id}')" class="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-lg font-bold shadow-md">加入</button>
                         </div>
                     `).join('');
 
@@ -735,19 +836,14 @@
                 if (match.status === 'waiting') {
                     container.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-20 animate-fade-in text-center">
-                        <div class="relative mb-8">
-                            <i class="fas fa-circle-notch fa-spin text-[#5c4dff] text-7xl"></i>
-                        </div>
+                        <div class="relative mb-8"><i class="fas fa-circle-notch fa-spin text-[#5c4dff] text-7xl"></i></div>
                         <h2 class="text-2xl font-black mb-2 text-white">等待對手加入...</h2>
                         <p class="text-slate-400 mb-10">你的擂台已經準備好了</p>
-                        <button onclick="leaveRoom()" class="px-8 py-3 border border-rose-500/50 text-rose-400 font-bold rounded-full hover:bg-rose-900/20 transition-colors">
-                            取消並離開
-                        </button>
+                        <button onclick="leaveRoom()" class="px-8 py-3 border border-rose-500/50 text-rose-400 font-bold rounded-full hover:bg-rose-900/20 transition-colors">取消並離開</button>
                     </div>`;
                     return;
                 }
 
-                // 戰鬥畫面渲染
                 const isP1 = match.player1 === State.user.uid;
                 const mySt = isP1 ? match.p1State : match.p2State;
                 const opSt = isP1 ? match.p2State : match.p1State;
@@ -790,7 +886,6 @@
 
                 container.innerHTML = `
                 <div class="flex flex-col h-full items-center w-full max-w-lg mx-auto animate-fade-in relative">
-                    <!-- 計分板 -->
                     <div class="w-full flex justify-between items-center mb-4 bg-[#1e293b] p-3 rounded-2xl border border-slate-700 shadow-md">
                         <div class="flex items-center gap-3 w-1/3">
                             <div class="bg-blue-500/20 text-blue-400 p-2 rounded-lg text-xl font-black border border-blue-500/30 w-12 text-center">${mySt.wins}</div>
@@ -805,8 +900,6 @@
                             <div class="bg-rose-500/20 text-rose-400 p-2 rounded-lg text-xl font-black border border-rose-500/30 w-12 text-center">${opSt.wins}</div>
                         </div>
                     </div>
-
-                    <!-- 戰鬥區 -->
                     <div class="w-full flex flex-col justify-between items-center relative py-8 my-2 bg-gradient-to-b from-[#1e293b] to-[#0f172a] rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[420px]">
                         <div class="w-full flex justify-center transform scale-[0.85] absolute top-2">${opCardHTML}</div>
                         <div class="z-10 flex items-center justify-center bg-[#0f172a] rounded-full p-4 border border-slate-600 shadow-lg relative my-auto">
@@ -814,7 +907,6 @@
                         </div>
                         <div class="w-full flex justify-center transform scale-[0.85] absolute bottom-2">${myCardHTML}</div>
                     </div>
-
                     ${fin ? `
                         <div class="w-full bg-[#1e293b] border border-indigo-500/50 rounded-2xl p-6 text-center animate-zoom-in shadow-xl mt-4">
                             <h2 class="text-3xl font-black mb-6 ${mySt.wins > opSt.wins ? 'text-emerald-400' : 'text-slate-400'}">
@@ -827,7 +919,7 @@
             }
         }
 
-        // --- 9. 全域鍵盤監聽 ---
+        // --- 鍵盤監聽 ---
         document.addEventListener('keydown', (e) => {
             if (State.activeTab !== 'hangman') return;
             if (State.hangman.status === 'playing' && /^[a-zA-Z]$/.test(e.key)) {
