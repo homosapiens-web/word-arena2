@@ -1,751 +1,902 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
-import { Heart, Sword, Star, Shield, Lock, Play, RefreshCw, Trophy, Skull, Loader2, Gamepad2, Library as LibraryIcon, Swords, Keyboard, PlusCircle, LogIn } from 'lucide-react';
-
-// --- Firebase 初始化 ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'hangman-card-battler';
-
-// --- 輔助工具：獲取單字翻譯與 CEFR 分級 ---
-const fetchWordDetails = async (word) => {
-  let translation = "未知";
-  let isRare = false;
-  let cefr = "A1";
-
-  try {
-    // 呼叫 MyMemory 翻譯 API (支援繁體中文)
-    const res = await fetch(`https://api.mymemory.translated.net/get?q=${word}&langpair=en|zh-TW`);
-    const data = await res.json();
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>單字卡牌大亂鬥 - Word Arena</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    if (data && data.responseData && data.responseData.translatedText) {
-      translation = data.responseData.translatedText;
-      // 如果翻譯出來還是英文原字，代表極度罕見或無翻譯
-      if (translation.toLowerCase() === word.toLowerCase()) {
-        translation = "異界詞彙 (無翻譯)";
-        isRare = true;
-      }
-    } else {
-      isRare = true;
-    }
-  } catch (e) {
-    translation = "異界詞彙 (翻譯失效)";
-    isRare = true;
-  }
+    <style>
+        /* 自定義動畫 */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideInDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes zoomIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-slide-up { animation: slideInUp 0.4s ease-out forwards; }
+        .animate-slide-down { animation: slideInDown 0.4s ease-out forwards; }
+        .animate-zoom-in { animation: zoomIn 0.3s ease-out forwards; }
+        
+        /* 隱藏捲軸但可滾動 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white font-sans selection:bg-indigo-500/30 min-h-screen relative pb-20">
 
-  // 根據長度與是否罕見，推算 CEFR 分級
-  if (isRare) {
-    cefr = "???"; // 異界詞彙專屬分級
-  } else {
-    const l = word.length;
-    if (l <= 4) cefr = "A1";
-    else if (l === 5) cefr = "A2";
-    else if (l === 6) cefr = "B1";
-    else if (l === 7) cefr = "B2";
-    else if (l === 8) cefr = "C1";
-    else cefr = "C2";
-  }
+    <!-- 全域載入畫面 -->
+    <div id="global-loading" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center gap-4">
+        <i class="fas fa-spinner fa-spin text-5xl text-indigo-500"></i>
+        <p id="loading-text" class="text-lg font-bold">正在連線至伺服器...</p>
+    </div>
 
-  return { translation, isRare, cefr };
-};
-
-// --- 主應用程式 ---
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [cards, setCards] = useState([]);
-  const [activeTab, setActiveTab] = useState('hangman'); 
-  const [loadingText, setLoadingText] = useState("正在連線至伺服器...");
-
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth Error:", err);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) setLoadingText("");
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
-    const unsubscribe = onSnapshot(cardsRef, (snapshot) => {
-      const loadedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      loadedCards.sort((a, b) => b.createdAt - a.createdAt);
-      setCards(loadedCards);
-    }, (error) => console.error(error));
-    return () => unsubscribe();
-  }, [user]);
-
-  const hasEnoughCards = cards.length >= 4;
-  const unseenCount = cards.filter(c => c.isNew).length;
-
-  if (loadingText) {
-    return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center flex-col gap-4">
-      <Loader2 className="animate-spin text-indigo-500" size={48} />
-      <p>{loadingText}</p>
-    </div>;
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-indigo-500/30">
-      <header className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center sticky top-0 z-50 shadow-md">
-        <h1 className="text-xl font-black flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-          <Gamepad2 className="text-indigo-400" />
-          Word Arena
+    <!-- 頂部導航 -->
+    <header class="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center sticky top-0 z-50 shadow-md">
+        <h1 class="text-xl font-black flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+            <i class="fas fa-gamepad text-indigo-400"></i> Word Arena
         </h1>
-        <div className="text-sm text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
-          總卡牌: <span className="text-white font-semibold">{cards.length}</span> 張
+        <div class="text-sm text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+            總卡牌: <span id="total-cards-count" class="text-white font-semibold">0</span> 張
         </div>
-      </header>
+    </header>
 
-      <main className="pb-24 max-w-4xl mx-auto p-4 min-h-[calc(100vh-80px)]">
-        {activeTab === 'hangman' && <HangmanGame user={user} />}
-        {activeTab === 'library' && <Library cards={cards} user={user} />}
-        {activeTab === 'arena' && <MultiplayerArena user={user} cards={cards} />}
-      </main>
-
-      <nav className="fixed bottom-0 w-full bg-slate-800 border-t border-slate-700 flex justify-around p-2 z-50">
-        <TabButton active={activeTab === 'hangman'} onClick={() => setActiveTab('hangman')} icon={<Gamepad2 size={24}/>} label="猜單字" />
-        <TabButton active={activeTab === 'library'} onClick={() => setActiveTab('library')} icon={<LibraryIcon size={24}/>} label="卡牌庫" badge={unseenCount}/>
-        <TabButton active={activeTab === 'arena'} onClick={() => { if(hasEnoughCards) setActiveTab('arena'); }} icon={<Swords size={24}/>} label="連線對戰" locked={!hasEnoughCards}/>
-      </nav>
-    </div>
-  );
-}
-
-function TabButton({ active, onClick, icon, label, locked, badge }) {
-  return (
-    <button onClick={onClick} disabled={locked} className={`relative flex flex-col items-center justify-center w-full py-2 transition-colors ${locked ? 'text-slate-600 cursor-not-allowed' : active ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'}`}>
-      {locked ? <Lock size={24} className="mb-1" /> : icon}
-      <span className="text-xs font-medium mt-1">{label} {locked && '(需4張卡)'}</span>
-      {badge > 0 && !active && <span className="absolute top-1 right-1/4 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-bounce">{badge}</span>}
-    </button>
-  );
-}
-
-// --- 卡牌顯示元件 (包含 CEFR 與異界特殊標記) ---
-function CardDisplay({ card, hideDetails = false }) {
-  if (hideDetails) {
-    return (
-      <div className="bg-slate-800 border-2 border-slate-700 rounded-xl p-4 w-40 h-56 flex items-center justify-center shadow-lg relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/50 to-slate-800"></div>
-        <Lock className="text-slate-600 relative z-10" size={32} />
-      </div>
-    );
-  }
-
-  const rarityColors = {
-    1: 'border-slate-500 from-slate-700 to-slate-800 text-slate-400',
-    2: 'border-green-600 from-green-900 to-slate-800 text-green-400',
-    3: 'border-blue-500 from-blue-900 to-slate-800 text-blue-400',
-    4: 'border-purple-500 from-purple-900 to-slate-800 text-purple-400',
-    5: 'border-yellow-500 from-yellow-900 to-orange-900 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
-  };
-  const theme = rarityColors[card.stars] || rarityColors[1];
-
-  // CEFR 徽章顏色
-  const cefrColors = {
-    'A1': 'bg-green-600', 'A2': 'bg-green-500', 
-    'B1': 'bg-blue-500', 'B2': 'bg-indigo-500', 
-    'C1': 'bg-purple-500', 'C2': 'bg-rose-500', 
-    '???': 'bg-slate-900 border border-red-500 text-red-500 animate-pulse'
-  };
-
-  return (
-    <div className={`relative bg-gradient-to-br ${theme} border-2 rounded-xl p-3 w-full max-w-[200px] aspect-[3/4] flex flex-col items-center shadow-lg overflow-hidden flex-shrink-0`}>
-      
-      {/* 頂部資訊列: CEFR & 星星 */}
-      <div className="flex justify-between w-full items-center mb-2">
-        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shadow ${cefrColors[card.cefr] || 'bg-slate-600'} text-white`}>
-          {card.cefr}
-        </span>
-        <div className="flex gap-0.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star key={i} size={12} fill={i < card.stars ? 'currentColor' : 'none'} className={i < card.stars ? 'text-yellow-400' : 'text-slate-600'} />
-          ))}
-        </div>
-      </div>
-      
-      {/* 單字本身 */}
-      <h3 className={`font-black tracking-wider text-white text-center break-words w-full px-1 uppercase my-auto drop-shadow-md ${card.word.length > 8 ? 'text-xl' : 'text-2xl'}`}>
-        {card.word}
-      </h3>
-      
-      {/* 翻譯與特殊能力標籤 */}
-      <div className="text-center w-full mt-auto mb-3">
-        <p className="text-xs text-slate-300 line-clamp-2 px-1 font-medium bg-black/20 rounded py-1">{card.translation}</p>
-        {card.isRare && (
-          <div className="bg-red-900/80 border border-red-500 text-red-200 text-[9px] py-1 px-1 rounded mt-1 flex items-center justify-center gap-1 font-bold">
-            <Shield size={10} className="text-red-400"/> 絕對防禦 (傷害無效)
-          </div>
-        )}
-      </div>
-
-      {/* 戰鬥數值 */}
-      <div className="bg-black/50 w-full rounded p-1.5 flex justify-between items-center text-sm font-bold backdrop-blur-sm border border-white/10 mt-auto">
-        <div className="flex items-center gap-1 text-red-400"><Heart size={14} fill="currentColor" /> {card.hp}</div>
-        <div className="flex items-center gap-1 text-blue-400"><Sword size={14} fill="currentColor" /> {card.atk}</div>
-      </div>
-    </div>
-  );
-}
-
-// --- 猜單字遊戲 (支援鍵盤) ---
-function HangmanGame({ user }) {
-  const [word, setWord] = useState('');
-  const [guessed, setGuessed] = useState([]);
-  const [mistakes, setMistakes] = useState(0);
-  const [status, setStatus] = useState('loading'); 
-  const [newCard, setNewCard] = useState(null);
-  const maxMistakes = 6;
-
-  const initGame = useCallback(async () => {
-    setStatus('loading'); setGuessed([]); setMistakes(0); setNewCard(null);
-    try {
-      const isCommon = Math.random() > 0.3; // 70% 機率出常見字
-      let newWord = "";
-      if(isCommon) {
-         const topics = ["animals", "technology", "sports", "food", "nature"];
-         const topic = topics[Math.floor(Math.random() * topics.length)];
-         const res = await fetch(`https://api.datamuse.com/words?ml=${topic}&max=50`);
-         const data = await res.json();
-         const valid = data.filter(d => d.word.length >= 4 && d.word.length <= 8 && /^[a-zA-Z]+$/.test(d.word));
-         newWord = valid[Math.floor(Math.random() * valid.length)].word.toUpperCase();
-      } else {
-         const len = Math.floor(Math.random() * 5) + 4;
-         const res = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`);
-         const data = await res.json();
-         newWord = data[0].toUpperCase();
-      }
-      setWord(newWord); setStatus('playing');
-    } catch (err) {
-      setWord('ERROR'); setStatus('playing');
-    }
-  }, []);
-
-  useEffect(() => { initGame(); }, [initGame]);
-
-  const handleGuess = useCallback((letter) => {
-    if (status !== 'playing' || guessed.includes(letter)) return;
-    const newGuessed = [...guessed, letter];
-    setGuessed(newGuessed);
-
-    if (!word.includes(letter)) {
-      const newMistakes = mistakes + 1;
-      setMistakes(newMistakes);
-      if (newMistakes >= maxMistakes) handleGameOver('lost', newGuessed);
-    } else {
-      const isWon = word.split('').every(char => newGuessed.includes(char));
-      if (isWon) handleGameOver('won', newGuessed);
-    }
-  }, [status, guessed, word, mistakes]);
-
-  // 鍵盤監聽事件
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (status === 'playing') {
-        if (/^[a-zA-Z]$/.test(e.key)) {
-          handleGuess(e.key.toUpperCase());
-        }
-      } else if ((status === 'won' || status === 'lost') && e.key === 'Enter') {
-        initGame();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [status, handleGuess, initGame]);
-
-  const handleGameOver = async (result, finalGuessed) => {
-    setStatus('saving');
-    const details = await fetchWordDetails(word.toLowerCase());
-    
-    // 計算卡牌數值 (以 CEFR 與長度為基準)
-    const length = word.length;
-    const cefrBonus = {'A1': 10, 'A2': 20, 'B1': 30, 'B2': 40, 'C1': 50, 'C2': 60, '???': 40}[details.cefr] || 0;
-    
-    const hp = length * 15 + cefrBonus + Math.floor(Math.random() * 40);
-    const atk = length * 8 + cefrBonus + Math.floor(Math.random() * 20);
-    const stars = details.isRare ? 5 : Math.min(5, Math.max(1, Math.floor(length / 2) + (cefrBonus >= 30 ? 1 : 0)));
-    
-    const cardData = {
-      word, translation: details.translation, cefr: details.cefr,
-      hp, atk, stars, isRare: details.isRare,
-      createdAt: Date.now(), isNew: true
-    };
-
-    setNewCard(cardData);
-
-    if (result === 'won' && user) {
-      try {
-        const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
-        await addDoc(cardsRef, cardData);
-      } catch (e) { console.error(e); }
-    }
-    setStatus(result);
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center max-w-lg mx-auto">
-      {status === 'loading' && <Loader2 className="animate-spin my-20 text-indigo-500" size={48} />}
-      
-      {status === 'playing' && (
-        <div className="w-full flex flex-col items-center animate-in fade-in">
-          {/* 絞刑架視覺 */}
-          <div className="mb-6 p-4 bg-slate-800 rounded-xl w-full flex flex-col items-center border border-slate-700 shadow-inner">
-             <div className="h-40 w-40 relative border-l-4 border-b-4 border-slate-600 mb-4">
-                <div className="absolute top-0 left-0 w-20 border-t-4 border-slate-600" />
-                <div className="absolute top-0 left-20 h-8 border-l-4 border-slate-600" />
-                {mistakes > 0 && <div className="absolute top-8 left-16 w-8 h-8 rounded-full border-4 border-red-400" />}
-                {mistakes > 1 && <div className="absolute top-16 left-[78px] h-12 border-l-4 border-slate-300" />}
-                {mistakes > 2 && <div className="absolute top-20 left-12 w-8 border-t-4 border-slate-300 -rotate-45" />}
-                {mistakes > 3 && <div className="absolute top-20 left-20 w-8 border-t-4 border-slate-300 rotate-45" />}
-                {mistakes > 4 && <div className="absolute top-28 left-14 w-8 border-t-4 border-slate-300 rotate-45" />}
-                {mistakes > 5 && <div className="absolute top-28 left-18 w-8 border-t-4 border-slate-300 -rotate-45" />}
-             </div>
-             <div className="text-red-400 font-bold bg-red-900/30 px-4 py-1 rounded-full">剩餘生命: {maxMistakes - mistakes}</div>
-          </div>
-          
-          {/* 單字顯示區 */}
-          <div className="mb-8 text-center tracking-widest flex gap-2 flex-wrap justify-center">
-            {word.split('').map((char, i) => (
-              <span key={i} className={`text-4xl font-black border-b-4 w-10 inline-block text-center pb-1 ${guessed.includes(char) ? 'border-indigo-400 text-white' : 'border-slate-600 text-transparent'}`}>
-                {guessed.includes(char) ? char : '_'}
-              </span>
-            ))}
-          </div>
-
-          <div className="text-sm text-slate-400 mb-4 flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-full">
-            <Keyboard size={18}/> 支援實體鍵盤直接輸入字母
-          </div>
-
-          <div className="grid grid-cols-7 gap-2 w-full max-w-md">
-            {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(char => {
-              const isUsed = guessed.includes(char);
-              return (
-                <button key={char} disabled={isUsed} onClick={() => handleGuess(char)}
-                  className={`py-3 rounded-lg font-bold text-lg transition-all ${isUsed ? 'bg-slate-800 text-slate-600 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-90 text-white shadow-md'}`}>
-                  {char}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {status === 'saving' && (
-         <div className="flex flex-col items-center my-20">
-            <Loader2 className="animate-spin text-indigo-500 mb-4" size={48} />
-            <p className="text-indigo-300 font-bold animate-pulse">正在透過 API 解析翻譯與 CEFR 等級...</p>
-         </div>
-      )}
-
-      {(status === 'won' || status === 'lost') && newCard && (
-        <div className="flex flex-col items-center animate-in zoom-in duration-300 w-full">
-          <div className={`text-3xl font-black mb-2 flex items-center gap-2 ${status === 'won' ? 'text-green-400' : 'text-red-400'}`}>
-            {status === 'won' ? <Trophy size={32}/> : <Skull size={32}/>} 
-            {status === 'won' ? '挑戰成功！' : '遊戲結束'}
-          </div>
-          <p className="text-slate-400 mb-6">
-            {status === 'won' ? '成功解析單字，卡牌已加入牌庫！' : `正確答案是：${word}`}
-          </p>
-          
-          <div className={`p-6 rounded-2xl w-full max-w-sm flex justify-center mb-8 shadow-2xl ${status === 'won' ? 'bg-green-900/20 border border-green-500/30' : 'bg-red-900/20 border border-red-500/30 grayscale opacity-80'}`}>
-             <CardDisplay card={newCard} />
-          </div>
-
-          <button onClick={initGame} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-full shadow-lg flex items-center gap-2 transition-transform hover:scale-105 w-full max-w-xs justify-center text-lg">
-            <RefreshCw size={24} /> 再玩一局 <kbd className="hidden sm:inline-block ml-2 text-xs bg-indigo-800 px-2 py-1 rounded border border-indigo-400">Enter</kbd>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- 卡牌庫 ---
-function Library({ cards, user }) {
-  useEffect(() => {
-    if(!user) return;
-    cards.forEach(card => {
-      if(card.isNew) {
-        const cardRef = doc(db, 'artifacts', appId, 'users', user.uid, 'cards', card.id);
-        updateDoc(cardRef, { isNew: false }).catch(e=>console.error(e));
-      }
-    });
-  }, [cards, user]);
-
-  if (cards.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
-        <LibraryIcon size={64} className="mb-4 opacity-30" />
-        <p>你的卡牌庫空空如也。</p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><LibraryIcon className="text-indigo-400"/> 我的牌庫</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 justify-items-center pb-8">
-        {cards.map(card => (
-          <div key={card.id} className="w-full max-w-[180px] transform transition-transform hover:scale-105 hover:z-10 cursor-pointer">
-            <CardDisplay card={card} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// --- 聯機對戰大廳與競技場 (手動選房) ---
-function MultiplayerArena({ user, cards }) {
-  const [view, setView] = useState('deck_select'); // deck_select, lobby, room
-  const [selectedDeck, setSelectedDeck] = useState([]);
-  const [rooms, setRooms] = useState([]);
-  const [matchId, setMatchId] = useState(null);
-  const [matchData, setMatchData] = useState(null);
-
-  // 1. 監聽公開房間列表
-  useEffect(() => {
-    const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
-    const unsubscribe = onSnapshot(matchesRef, (snapshot) => {
-      const allMatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // 更新大廳房間列表 (只顯示等待中的別人的房間)
-      const waitingRooms = allMatches.filter(m => m.status === 'waiting' && m.player1 !== user.uid);
-      setRooms(waitingRooms);
-
-      // 如果我已經在某個房間裡，更新我的房間狀態
-      if (matchId) {
-        const myMatch = allMatches.find(m => m.id === matchId);
-        if (myMatch) {
-           setMatchData(myMatch);
-           if (myMatch.status === 'playing') setView('room');
-        } else {
-           // 房間被解散了
-           setMatchId(null); setMatchData(null); setView('lobby');
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [user.uid, matchId]);
-
-  // 回合結算邏輯
-  useEffect(() => {
-    if (!matchData || !matchId) return;
-    if (matchData.player1 === user.uid && matchData.status === 'playing') {
-      if (matchData.p1State.ready && matchData.p2State.ready && !matchData.resolving) {
-         resolveRound(matchId, matchData);
-      }
-    }
-  }, [matchData, matchId, user.uid]);
-
-  const resolveRound = async (id, match) => {
-    const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', id);
-    await updateDoc(matchRef, { resolving: true });
-
-    const p1Card = match.p1State.team[match.p1State.currentCardIndex];
-    const p2Card = match.p2State.team[match.p2State.currentCardIndex];
-
-    let p1Dmg = p1Card.atk;
-    let p2Dmg = p2Card.atk;
-
-    // 🌟 異界詞彙專屬特殊能力：絕對防禦 🌟
-    if (p1Card.isRare) p2Dmg = 0;
-    if (p2Card.isRare) p1Dmg = 0;
-
-    const p1Remain = p1Card.hp - p2Dmg;
-    const p2Remain = p2Card.hp - p1Dmg;
-
-    let p1Wins = match.p1State.wins;
-    let p2Wins = match.p2State.wins;
-
-    if (p1Remain > p2Remain) p1Wins++;
-    else if (p2Remain > p1Remain) p2Wins++;
-
-    const nextRound = match.round + 1;
-    const isGameOver = nextRound > 3;
-
-    // 延遲展示戰鬥動畫
-    setTimeout(async () => {
-        await updateDoc(matchRef, {
-            status: isGameOver ? 'finished' : 'playing',
-            round: nextRound,
-            resolving: false,
-            'p1State.wins': p1Wins, 'p2State.wins': p2Wins,
-            'p1State.ready': false, 'p2State.ready': false,
-            'p1State.usedCards': [...match.p1State.usedCards, match.p1State.currentCardIndex],
-            'p2State.usedCards': [...match.p2State.usedCards, match.p2State.currentCardIndex],
-            'p1State.currentCardIndex': null, 'p2State.currentCardIndex': null,
-            lastResult: { round: match.round, p1Card, p2Card, p1Dmg, p2Dmg, p1Remain, p2Remain }
-        });
-    }, 4000);
-  };
-
-  const toggleCardSelection = (card) => {
-    if (selectedDeck.find(c => c.id === card.id)) {
-      setSelectedDeck(selectedDeck.filter(c => c.id !== card.id));
-    } else if (selectedDeck.length < 4) {
-      setSelectedDeck([...selectedDeck, card]);
-    }
-  };
-
-  const createRoom = async () => {
-    const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
-    const newMatch = await addDoc(matchesRef, {
-      status: 'waiting',
-      player1: user.uid, p1Name: '玩家 ' + user.uid.slice(-4),
-      p1State: { team: selectedDeck, currentCardIndex: null, wins: 0, ready: false, usedCards: [] },
-      round: 1, resolving: false, createdAt: Date.now()
-    });
-    setMatchId(newMatch.id);
-    setView('room');
-  };
-
-  const joinRoom = async (roomId) => {
-    const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', roomId);
-    await updateDoc(matchRef, {
-      status: 'playing',
-      player2: user.uid, p2Name: '玩家 ' + user.uid.slice(-4),
-      p2State: { team: selectedDeck, currentCardIndex: null, wins: 0, ready: false, usedCards: [] }
-    });
-    setMatchId(roomId);
-    setView('room');
-  };
-
-  const leaveRoom = async () => {
-    if (matchId && matchData && matchData.player1 === user.uid && matchData.status === 'waiting') {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId));
-    }
-    setMatchId(null); setMatchData(null); setView('lobby');
-  };
-
-  const playCard = async (index) => {
-    if(!matchId || !matchData) return;
-    const isPlayer1 = matchData.player1 === user.uid;
-    const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
-    if(isPlayer1) await updateDoc(matchRef, { 'p1State.currentCardIndex': index, 'p1State.ready': true });
-    else await updateDoc(matchRef, { 'p2State.currentCardIndex': index, 'p2State.ready': true });
-  };
-
-  // 畫面 1: 組建牌組
-  if (view === 'deck_select') {
-    return (
-      <div className="animate-in fade-in">
-        <h2 className="text-2xl font-black text-center mb-2 text-purple-400">⚔️ 第一步：選擇出戰陣容</h2>
-        <p className="text-slate-400 text-sm text-center mb-6">點擊下方卡牌選擇 <strong className="text-white text-lg">{selectedDeck.length}/4</strong> 張，進入三戰兩勝的暗牌對決！</p>
+    <!-- 主視圖區塊 -->
+    <main class="max-w-4xl mx-auto p-4 relative w-full h-full min-h-[calc(100vh-140px)]">
         
-        <div className="flex justify-center gap-2 mb-8 min-h-[140px] p-4 bg-slate-800 rounded-xl border-2 border-slate-700 w-full overflow-x-auto shadow-inner">
-          {selectedDeck.length === 0 && <div className="text-slate-500 my-auto">點擊下方卡牌加入牌組</div>}
-          {selectedDeck.map((card, idx) => (
-            <div key={idx} className="relative scale-75 origin-top -mx-4 cursor-pointer hover:-translate-y-2 transition-transform shrink-0" onClick={() => toggleCardSelection(card)}>
-              <div className="absolute -top-2 -right-2 bg-red-500 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-20 shadow-md">X</div>
-              <CardDisplay card={card} />
+        <!-- 視圖 1: 猜單字 (Hangman) -->
+        <div id="view-hangman" class="animate-fade-in">
+            <div id="hangman-container" class="flex flex-col items-center justify-center max-w-lg mx-auto w-full">
+                <!-- 內容由 JS 渲染 -->
             </div>
-          ))}
         </div>
 
-        <button onClick={() => setView('lobby')} disabled={selectedDeck.length !== 4} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex justify-center items-center gap-2 mb-8 ${selectedDeck.length === 4 ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'}`}>
-           <LogIn size={24}/> 進入對戰大廳
+        <!-- 視圖 2: 卡牌庫 (Library) -->
+        <div id="view-library" class="hidden animate-fade-in">
+            <h2 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-book-open text-indigo-400"></i> 我的牌庫</h2>
+            <div id="library-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 justify-items-center pb-8">
+                <!-- 卡牌由 JS 渲染 -->
+            </div>
+        </div>
+
+        <!-- 視圖 3: 競技場 (Arena) -->
+        <div id="view-arena" class="hidden animate-fade-in w-full">
+            <div id="arena-container" class="w-full">
+                <!-- 內容由 JS 渲染 -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 底部導航 -->
+    <nav class="fixed bottom-0 w-full bg-slate-800 border-t border-slate-700 flex justify-around p-2 z-50">
+        <button id="tab-hangman" onclick="switchTab('hangman')" class="tab-btn active text-indigo-400 relative flex flex-col items-center justify-center w-full py-2 transition-colors">
+            <i class="fas fa-gamepad text-2xl"></i>
+            <span class="text-xs font-medium mt-1">猜單字</span>
         </button>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {cards.map(card => {
-            const isSelected = selectedDeck.find(c => c.id === card.id);
-            return (
-              <div key={card.id} onClick={() => toggleCardSelection(card)} className={`cursor-pointer transition-all ${isSelected ? 'ring-4 ring-purple-500 scale-95 opacity-50' : 'hover:scale-105'}`}>
-                <CardDisplay card={card} />
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // 畫面 2: 對戰大廳 (手動選房)
-  if (view === 'lobby') {
-    return (
-      <div className="animate-in slide-in-from-right">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-purple-400">🌍 對戰大廳</h2>
-          <button onClick={() => setView('deck_select')} className="text-sm text-slate-400 underline">重新選牌</button>
-        </div>
-        
-        <button onClick={createRoom} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl mb-8 flex justify-center items-center gap-2 shadow-lg shadow-indigo-900/50">
-          <PlusCircle size={20}/> 創建我的房間
+        <button id="tab-library" onclick="switchTab('library')" class="tab-btn text-slate-400 hover:text-slate-200 relative flex flex-col items-center justify-center w-full py-2 transition-colors">
+            <i class="fas fa-book-open text-2xl"></i>
+            <span class="text-xs font-medium mt-1">卡牌庫</span>
+            <span id="badge-library" class="hidden absolute top-1 right-1/4 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-bounce">0</span>
         </button>
+        <button id="tab-arena" onclick="switchTab('arena')" class="tab-btn text-slate-600 cursor-not-allowed relative flex flex-col items-center justify-center w-full py-2 transition-colors" disabled>
+            <i class="fas fa-lock text-2xl mb-1" id="arena-icon"></i>
+            <span class="text-xs font-medium mt-1" id="arena-label">連線對戰 (需4張)</span>
+        </button>
+    </nav>
 
-        <h3 className="text-slate-400 font-bold mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
-           <Swords size={18}/> 可加入的玩家房間
-        </h3>
-        
-        {rooms.length === 0 ? (
-          <div className="text-center text-slate-500 py-10 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
-            目前沒有其他玩家開房，自己創建一個吧！
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {rooms.map(room => (
-              <div key={room.id} className="bg-slate-800 border border-slate-600 p-4 rounded-xl flex justify-between items-center hover:bg-slate-700 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="bg-slate-900 p-2 rounded-full"><Loader2 className="animate-spin text-purple-400" size={16}/></div>
-                  <span className="font-bold text-lg">{room.p1Name} <span className="text-slate-400 text-sm font-normal">的擂台</span></span>
+    <!-- Firebase SDK (Modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- 1. 初始化 Firebase ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'hangman-card-battler-html';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- 2. 全域狀態 ---
+        const State = {
+            user: null,
+            cards: [],
+            activeTab: 'hangman',
+            
+            // Hangman 狀態
+            hangman: {
+                status: 'loading', // loading, playing, saving, won, lost
+                word: '',
+                guessed: [],
+                mistakes: 0,
+                maxMistakes: 6,
+                newCard: null
+            },
+
+            // Arena 狀態
+            arena: {
+                view: 'deck_select', // deck_select, lobby, room
+                selectedDeck: [],
+                rooms: [],
+                matchId: null,
+                matchData: null,
+                unsubscribeMatchList: null
+            }
+        };
+
+        // --- 3. 核心翻譯與 CEFR 輔助函數 ---
+        async function fetchWordDetails(word) {
+            let translation = "未知";
+            let isRare = false;
+            let cefr = "A1";
+
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${word}&langpair=en|zh-TW`);
+                const data = await res.json();
+                
+                if (data && data.responseData && data.responseData.translatedText) {
+                    translation = data.responseData.translatedText;
+                    if (translation.toLowerCase() === word.toLowerCase()) {
+                        translation = "異界詞彙 (無翻譯)";
+                        isRare = true;
+                    }
+                } else {
+                    isRare = true;
+                }
+            } catch (e) {
+                translation = "異界詞彙 (翻譯失效)";
+                isRare = true;
+            }
+
+            if (isRare) {
+                cefr = "???";
+            } else {
+                const l = word.length;
+                if (l <= 4) cefr = "A1";
+                else if (l === 5) cefr = "A2";
+                else if (l === 6) cefr = "B1";
+                else if (l === 7) cefr = "B2";
+                else if (l === 8) cefr = "C1";
+                else cefr = "C2";
+            }
+            return { translation, isRare, cefr };
+        }
+
+        // --- 4. 生成卡牌 HTML 模板函數 ---
+        window.generateCardHTML = function(card, hideDetails = false) {
+            if (hideDetails) {
+                return `
+                <div class="bg-slate-800 border-2 border-slate-700 rounded-xl p-4 w-full h-full min-h-[224px] flex items-center justify-center shadow-lg relative overflow-hidden aspect-[3/4]">
+                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-900/50 to-slate-800"></div>
+                    <i class="fas fa-lock text-slate-600 relative z-10 text-3xl"></i>
+                </div>`;
+            }
+
+            const rarityColors = {
+                1: 'border-slate-500 from-slate-700 to-slate-800 text-slate-400',
+                2: 'border-green-600 from-green-900 to-slate-800 text-green-400',
+                3: 'border-blue-500 from-blue-900 to-slate-800 text-blue-400',
+                4: 'border-purple-500 from-purple-900 to-slate-800 text-purple-400',
+                5: 'border-yellow-500 from-yellow-900 to-orange-900 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
+            };
+            const theme = rarityColors[card.stars] || rarityColors[1];
+
+            const cefrColors = {
+                'A1': 'bg-green-600', 'A2': 'bg-green-500', 
+                'B1': 'bg-blue-500', 'B2': 'bg-indigo-500', 
+                'C1': 'bg-purple-500', 'C2': 'bg-rose-500', 
+                '???': 'bg-slate-900 border border-red-500 text-red-500 animate-pulse'
+            };
+
+            let starsHTML = '';
+            for(let i=0; i<5; i++) {
+                starsHTML += `<i class="fas fa-star text-[10px] ${i < card.stars ? 'text-yellow-400' : 'text-slate-600'}"></i>`;
+            }
+
+            return `
+            <div class="relative bg-gradient-to-br ${theme} border-2 rounded-xl p-3 w-full aspect-[3/4] flex flex-col items-center shadow-lg overflow-hidden shrink-0">
+                <!-- 頂部資訊列: CEFR & 星星 -->
+                <div class="flex justify-between w-full items-center mb-2">
+                    <span class="text-[10px] font-black px-1.5 py-0.5 rounded shadow ${cefrColors[card.cefr] || 'bg-slate-600'} text-white">
+                        ${card.cefr}
+                    </span>
+                    <div class="flex gap-0.5">${starsHTML}</div>
                 </div>
-                <button onClick={() => joinRoom(room.id)} className="bg-green-600 hover:bg-green-500 px-6 py-2 rounded-lg font-bold shadow-md">
-                  加入對戰
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 畫面 3: 房間內 (等待對手 or 戰鬥中)
-  if (!matchData) return <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-purple-500 mb-4" size={48}/>載入房間中...</div>;
-
-  if (matchData.status === 'waiting') {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 animate-in fade-in">
-         <div className="relative mb-8">
-            <Loader2 className="animate-spin text-purple-500" size={80} />
-            <Swords className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-300" size={32} />
-         </div>
-         <h2 className="text-3xl font-black mt-6 mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400">房間已建立</h2>
-         <p className="text-slate-400 mb-10 text-lg">等待其他玩家進入大廳加入你的擂台...</p>
-         <button onClick={leaveRoom} className="px-8 py-3 border-2 border-red-500/50 text-red-400 font-bold rounded-full hover:bg-red-900/30 transition-colors">
-           解散房間並離開
-         </button>
-      </div>
-    );
-  }
-
-  // 戰鬥邏輯
-  const isPlayer1 = matchData.player1 === user.uid;
-  const myState = isPlayer1 ? matchData.p1State : matchData.p2State;
-  const opState = isPlayer1 ? matchData.p2State : matchData.p1State;
-  const isResolving = matchData.resolving;
-  const isFinished = matchData.status === 'finished';
-
-  return (
-    <div className="flex flex-col h-full items-center max-w-2xl mx-auto w-full animate-in fade-in">
-      {/* 頂部計分板 */}
-      <div className="w-full flex justify-between items-center mb-4 bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-lg">
-        <div className="flex flex-col items-center text-blue-400 font-bold w-1/3">
-           <span className="text-sm mb-1 text-slate-300">我方</span>
-           <span className="text-3xl bg-slate-800 w-16 h-12 flex items-center justify-center rounded-lg border border-slate-600">🏆 {myState.wins}</span>
-        </div>
-        <div className="flex flex-col items-center w-1/3">
-           <span className="text-xs text-slate-500 tracking-widest uppercase font-bold mb-1">Round</span>
-           <span className="text-4xl font-black text-white">{Math.min(matchData.round, 3)}<span className="text-xl text-slate-600">/3</span></span>
-        </div>
-        <div className="flex flex-col items-center text-red-400 font-bold w-1/3">
-           <span className="text-sm mb-1 text-slate-300">對手</span>
-           <span className="text-3xl bg-slate-800 w-16 h-12 flex items-center justify-center rounded-lg border border-slate-600">🏆 {opState.wins}</span>
-        </div>
-      </div>
-
-      {/* 競技場區塊 */}
-      <div className="flex-1 w-full flex flex-col justify-center items-center relative py-6 my-2 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl">
-        {/* 對手的卡 */}
-        <div className="absolute top-4 w-full flex justify-center transform scale-[0.85]">
-            {isResolving && matchData.lastResult ? (
-                <div className="animate-in slide-in-from-top-10 fade-in duration-500 relative">
-                   <CardDisplay card={isPlayer1 ? matchData.lastResult.p2Card : matchData.lastResult.p1Card} />
-                   <div className="absolute -bottom-6 right-0 bg-red-600 text-white font-black px-3 py-1 rounded-lg text-2xl rotate-12 animate-bounce shadow-lg border-2 border-white z-20">
-                     -{isPlayer1 ? matchData.lastResult.p2Dmg : matchData.lastResult.p1Dmg}
-                   </div>
+                
+                <!-- 單字本身 -->
+                <h3 class="font-black tracking-wider text-white text-center break-words w-full px-1 uppercase my-auto drop-shadow-md ${card.word.length > 8 ? 'text-xl' : 'text-2xl'}">
+                    ${card.word}
+                </h3>
+                
+                <!-- 翻譯與特殊能力標籤 -->
+                <div class="text-center w-full mt-auto mb-3 flex flex-col items-center">
+                    <p class="text-xs text-slate-300 line-clamp-2 px-1 font-medium bg-black/20 rounded py-1 w-full">${card.translation}</p>
+                    ${card.isRare ? `
+                    <div class="bg-red-900/80 border border-red-500 text-red-200 text-[9px] py-1 px-1 rounded mt-1 flex items-center justify-center gap-1 font-bold w-full">
+                        <i class="fas fa-shield-alt text-red-400"></i> 絕對防禦
+                    </div>` : ''}
                 </div>
-            ) : opState.ready ? (
-                <div className="animate-in slide-in-from-top-10"><CardDisplay hideDetails={true} /></div>
-            ) : (
-                <div className="w-40 h-56 border-2 border-dashed border-slate-600 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-800/50 backdrop-blur-sm">
-                  <Loader2 className="animate-spin mb-2" size={24}/>對手思考中
-                </div>
-            )}
-        </div>
 
-        {/* 衝突點 / VS 字樣 */}
-        <div className="z-10 flex items-center justify-center bg-black/80 rounded-full p-6 border border-slate-700 shadow-[0_0_30px_rgba(0,0,0,0.8)] relative my-20 backdrop-blur-md">
-            <Swords size={40} className="text-purple-500 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]" />
-            {isResolving && matchData.lastResult && (
-                <div className="absolute -right-32 w-28 text-center text-sm font-bold bg-purple-900/80 p-2 rounded border border-purple-500 text-white animate-in zoom-in">
-                    卡牌交鋒！
+                <!-- 戰鬥數值 -->
+                <div class="bg-black/50 w-full rounded p-1 flex justify-between items-center text-sm font-bold backdrop-blur-sm border border-white/10 mt-auto">
+                    <div class="flex items-center gap-1 text-red-400"><i class="fas fa-heart"></i> ${card.hp}</div>
+                    <div class="flex items-center gap-1 text-blue-400"><i class="fas fa-khanda"></i> ${card.atk}</div>
                 </div>
-            )}
-        </div>
+            </div>`;
+        }
 
-        {/* 我的卡 */}
-        <div className="absolute bottom-4 w-full flex justify-center transform scale-[0.85]">
-            {isResolving && matchData.lastResult ? (
-                <div className="animate-in slide-in-from-bottom-10 fade-in duration-500 relative">
-                    <CardDisplay card={isPlayer1 ? matchData.lastResult.p1Card : matchData.lastResult.p2Card} />
-                    <div className="absolute -top-6 right-0 bg-red-600 text-white font-black px-3 py-1 rounded-lg text-2xl -rotate-12 animate-bounce shadow-lg border-2 border-white z-20">
-                      -{isPlayer1 ? matchData.lastResult.p1Dmg : matchData.lastResult.p2Dmg}
-                    </div>
-                </div>
-            ) : myState.ready ? (
-                <div className="animate-in slide-in-from-bottom-10"><CardDisplay card={myState.team[myState.currentCardIndex]} /></div>
-            ) : (
-                <div className="w-40 h-56 border-2 border-dashed border-indigo-500 rounded-xl flex items-center justify-center text-indigo-400 bg-indigo-900/20 font-bold backdrop-blur-sm">
-                  ⬆️ 請從下方出牌
-                </div>
-            )}
-        </div>
-      </div>
+        // --- 5. 畫面渲染管理 ---
+        window.switchTab = function(tabId) {
+            if(tabId === 'arena' && State.cards.length < 4) return;
+            
+            State.activeTab = tabId;
+            ['hangman', 'library', 'arena'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`tab-${t}`);
+                btn.classList.remove('text-indigo-400', 'active');
+                if(t !== 'arena' || State.cards.length >= 4) btn.classList.add('text-slate-400');
+            });
+            
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabId}`).classList.remove('text-slate-400');
+            document.getElementById(`tab-${tabId}`).classList.add('text-indigo-400', 'active');
 
-      {/* 底部操作區 */}
-      {isFinished ? (
-        <div className="w-full bg-slate-800 border-2 border-purple-500 rounded-xl p-6 text-center animate-in zoom-in shadow-xl mt-4">
-            <h2 className="text-4xl font-black mb-6 flex items-center justify-center gap-2">
-                {myState.wins > opState.wins ? <><Trophy className="text-yellow-400" size={40}/> 勝利！</> : 
-                 opState.wins > myState.wins ? <><Skull className="text-red-400" size={40}/> 敗北</> : '🤝 平局！'}
-            </h2>
-            <button onClick={leaveRoom} className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-12 rounded-full shadow-lg text-lg">
-                返回大廳
-            </button>
-        </div>
-      ) : (
-        <div className={`w-full mt-4 transition-opacity duration-300 ${myState.ready || isResolving ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-            <p className="text-center font-bold text-slate-300 mb-3 bg-slate-800 py-1 rounded-full border border-slate-700 w-1/2 mx-auto">
-              {myState.ready ? '等待對手出牌...' : '點擊選擇你要出的牌'}
-            </p>
-            <div className="flex justify-center gap-2 overflow-x-auto pb-4 px-2">
-                {myState.team.map((card, idx) => {
-                    const isUsed = myState.usedCards.includes(idx);
-                    return (
-                        <div key={idx} onClick={() => !isUsed && !myState.ready && playCard(idx)}
-                             className={`transform transition-all w-[110px] shrink-0
-                                ${isUsed ? 'opacity-20 grayscale cursor-not-allowed scale-90' : 'cursor-pointer hover:-translate-y-4 hover:scale-105'}
-                                ${myState.currentCardIndex === idx ? 'ring-4 ring-indigo-500 -translate-y-4' : ''}
-                             `}
-                        >
-                            <div className="scale-[0.65] origin-top-left -mx-6 -mb-16">
-                              <CardDisplay card={card} />
-                            </div>
+            if (tabId === 'library') renderLibrary();
+            if (tabId === 'arena') renderArena();
+        };
+
+        function updateUI() {
+            document.getElementById('total-cards-count').innerText = State.cards.length;
+            
+            // 更新 Arena 按鈕狀態
+            const arenaBtn = document.getElementById('tab-arena');
+            const arenaIcon = document.getElementById('arena-icon');
+            const arenaLabel = document.getElementById('arena-label');
+            
+            if (State.cards.length >= 4) {
+                arenaBtn.disabled = false;
+                arenaBtn.classList.remove('text-slate-600', 'cursor-not-allowed');
+                if(State.activeTab !== 'arena') arenaBtn.classList.add('text-slate-400');
+                arenaIcon.className = 'fas fa-swords text-2xl mb-1';
+                arenaLabel.innerText = '連線對戰';
+            }
+
+            // 更新 Library 通知點
+            const unseenCount = State.cards.filter(c => c.isNew).length;
+            const badge = document.getElementById('badge-library');
+            if (unseenCount > 0 && State.activeTab !== 'library') {
+                badge.innerText = unseenCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // --- 6. Hangman 邏輯與渲染 ---
+        window.initHangmanGame = async function() {
+            State.hangman.status = 'loading';
+            State.hangman.guessed = [];
+            State.hangman.mistakes = 0;
+            State.hangman.newCard = null;
+            renderHangman();
+
+            try {
+                const isCommon = Math.random() > 0.3;
+                let newWord = "";
+                if(isCommon) {
+                    const topics = ["animals", "technology", "sports", "food", "nature"];
+                    const topic = topics[Math.floor(Math.random() * topics.length)];
+                    const res = await fetch(`https://api.datamuse.com/words?ml=${topic}&max=50`);
+                    const data = await res.json();
+                    const valid = data.filter(d => d.word.length >= 4 && d.word.length <= 8 && /^[a-zA-Z]+$/.test(d.word));
+                    newWord = valid[Math.floor(Math.random() * valid.length)].word.toUpperCase();
+                } else {
+                    const len = Math.floor(Math.random() * 5) + 4;
+                    const res = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`);
+                    const data = await res.json();
+                    newWord = data[0].toUpperCase();
+                }
+                State.hangman.word = newWord;
+                State.hangman.status = 'playing';
+                renderHangman();
+            } catch (err) {
+                State.hangman.word = 'ERROR';
+                State.hangman.status = 'playing';
+                renderHangman();
+            }
+        }
+
+        window.handleGuess = function(letter) {
+            if (State.activeTab !== 'hangman' || State.hangman.status !== 'playing' || State.hangman.guessed.includes(letter)) return;
+            
+            State.hangman.guessed.push(letter);
+            
+            if (!State.hangman.word.includes(letter)) {
+                State.hangman.mistakes++;
+                if (State.hangman.mistakes >= State.hangman.maxMistakes) {
+                    handleHangmanOver('lost');
+                    return;
+                }
+            } else {
+                const isWon = State.hangman.word.split('').every(char => State.hangman.guessed.includes(char));
+                if (isWon) {
+                    handleHangmanOver('won');
+                    return;
+                }
+            }
+            renderHangman();
+        }
+
+        async function handleHangmanOver(result) {
+            State.hangman.status = 'saving';
+            renderHangman();
+            
+            const word = State.hangman.word.toLowerCase();
+            const details = await fetchWordDetails(word);
+            
+            const length = word.length;
+            const cefrBonus = {'A1': 10, 'A2': 20, 'B1': 30, 'B2': 40, 'C1': 50, 'C2': 60, '???': 40}[details.cefr] || 0;
+            
+            const hp = length * 15 + cefrBonus + Math.floor(Math.random() * 40);
+            const atk = length * 8 + cefrBonus + Math.floor(Math.random() * 20);
+            const stars = details.isRare ? 5 : Math.min(5, Math.max(1, Math.floor(length / 2) + (cefrBonus >= 30 ? 1 : 0)));
+            
+            const cardData = {
+                word: State.hangman.word, translation: details.translation, cefr: details.cefr,
+                hp, atk, stars, isRare: details.isRare,
+                createdAt: Date.now(), isNew: true
+            };
+
+            State.hangman.newCard = cardData;
+
+            if (result === 'won' && State.user) {
+                try {
+                    const cardsRef = collection(db, 'artifacts', appId, 'users', State.user.uid, 'cards');
+                    await addDoc(cardsRef, cardData);
+                } catch (e) { console.error(e); }
+            }
+            
+            State.hangman.status = result;
+            renderHangman();
+        }
+
+        function renderHangman() {
+            const container = document.getElementById('hangman-container');
+            const hs = State.hangman;
+
+            if (hs.status === 'loading') {
+                container.innerHTML = `<i class="fas fa-spinner fa-spin my-20 text-indigo-500 text-5xl"></i>`;
+                return;
+            }
+
+            if (hs.status === 'saving') {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center my-20 animate-fade-in">
+                        <i class="fas fa-spinner fa-spin text-indigo-500 mb-4 text-5xl"></i>
+                        <p class="text-indigo-300 font-bold animate-pulse">正在透過 API 解析翻譯與 CEFR 等級...</p>
+                    </div>`;
+                return;
+            }
+
+            if (hs.status === 'playing') {
+                let hangmanSVG = `
+                    <div class="h-40 w-40 relative border-l-4 border-b-4 border-slate-600 mb-4 mx-auto">
+                        <div class="absolute top-0 left-0 w-20 border-t-4 border-slate-600"></div>
+                        <div class="absolute top-0 left-20 h-8 border-l-4 border-slate-600"></div>
+                        ${hs.mistakes > 0 ? `<div class="absolute top-8 left-16 w-8 h-8 rounded-full border-4 border-red-400"></div>` : ''}
+                        ${hs.mistakes > 1 ? `<div class="absolute top-16 left-[78px] h-12 border-l-4 border-slate-300"></div>` : ''}
+                        ${hs.mistakes > 2 ? `<div class="absolute top-20 left-12 w-8 border-t-4 border-slate-300 -rotate-45"></div>` : ''}
+                        ${hs.mistakes > 3 ? `<div class="absolute top-20 left-20 w-8 border-t-4 border-slate-300 rotate-45"></div>` : ''}
+                        ${hs.mistakes > 4 ? `<div class="absolute top-28 left-14 w-8 border-t-4 border-slate-300 rotate-45"></div>` : ''}
+                        ${hs.mistakes > 5 ? `<div class="absolute top-28 left-18 w-8 border-t-4 border-slate-300 -rotate-45"></div>` : ''}
+                    </div>`;
+
+                let wordHTML = hs.word.split('').map(char => {
+                    const isGuessed = hs.guessed.includes(char);
+                    return `<span class="text-4xl font-black border-b-4 w-10 inline-block text-center pb-1 mx-1 ${isGuessed ? 'border-indigo-400 text-white' : 'border-slate-600 text-transparent'}">${isGuessed ? char : '_'}</span>`;
+                }).join('');
+
+                let keysHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(char => {
+                    const isUsed = hs.guessed.includes(char);
+                    return `
+                    <button onclick="handleGuess('${char}')" ${isUsed ? 'disabled' : ''}
+                        class="py-3 rounded-lg font-bold text-lg transition-all ${isUsed ? 'bg-slate-800 text-slate-600 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-90 text-white shadow-md'}">
+                        ${char}
+                    </button>`;
+                }).join('');
+
+                container.innerHTML = `
+                    <div class="w-full flex flex-col items-center animate-fade-in">
+                        <div class="mb-6 p-4 bg-slate-800 rounded-xl w-full flex flex-col items-center border border-slate-700 shadow-inner">
+                            ${hangmanSVG}
+                            <div class="text-red-400 font-bold bg-red-900/30 px-4 py-1 rounded-full">剩餘生命: ${hs.maxMistakes - hs.mistakes}</div>
                         </div>
-                    );
-                })}
-            </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                        <div class="mb-8 text-center tracking-widest flex flex-wrap justify-center gap-y-4">
+                            ${wordHTML}
+                        </div>
+                        <div class="text-sm text-slate-400 mb-4 flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-full">
+                            <i class="fas fa-keyboard text-lg"></i> 支援實體鍵盤直接輸入字母
+                        </div>
+                        <div class="grid grid-cols-7 gap-2 w-full max-w-md">
+                            ${keysHTML}
+                        </div>
+                    </div>`;
+                return;
+            }
+
+            if (hs.status === 'won' || hs.status === 'lost') {
+                const isWon = hs.status === 'won';
+                container.innerHTML = `
+                    <div class="flex flex-col items-center animate-zoom-in w-full">
+                        <div class="text-3xl font-black mb-2 flex items-center gap-2 ${isWon ? 'text-green-400' : 'text-red-400'}">
+                            <i class="fas ${isWon ? 'fa-trophy' : 'fa-skull'} text-3xl"></i> 
+                            ${isWon ? '挑戰成功！' : '遊戲結束'}
+                        </div>
+                        <p class="text-slate-400 mb-6">
+                            ${isWon ? '成功解析單字，卡牌已加入牌庫！' : `正確答案是：${hs.word}`}
+                        </p>
+                        <div class="p-6 rounded-2xl w-full max-w-sm flex justify-center mb-8 shadow-2xl ${isWon ? 'bg-green-900/20 border border-green-500/30' : 'bg-red-900/20 border border-red-500/30 grayscale opacity-80'}">
+                            <div class="w-48">${generateCardHTML(hs.newCard)}</div>
+                        </div>
+                        <button onclick="initHangmanGame()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-full shadow-lg flex items-center gap-2 transition-transform hover:scale-105 w-full max-w-xs justify-center text-lg">
+                            <i class="fas fa-sync-alt"></i> 再玩一局 <kbd class="hidden sm:inline-block ml-2 text-xs bg-indigo-800 px-2 py-1 rounded border border-indigo-400 font-mono">Enter</kbd>
+                        </button>
+                    </div>`;
+            }
+        }
+
+        // --- 7. Library 邏輯與渲染 ---
+        function renderLibrary() {
+            const container = document.getElementById('library-container');
+            
+            // 清除新卡標記
+            State.cards.forEach(card => {
+                if(card.isNew) {
+                    const cardRef = doc(db, 'artifacts', appId, 'users', State.user.uid, 'cards', card.id);
+                    updateDoc(cardRef, { isNew: false }).catch(e=>console.error(e));
+                }
+            });
+            updateUI(); // 更新角標
+
+            if (State.cards.length === 0) {
+                container.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center h-[50vh] text-slate-400 w-full">
+                    <i class="fas fa-book-open text-6xl mb-4 opacity-30"></i>
+                    <p>你的卡牌庫空空如也。</p>
+                </div>`;
+                return;
+            }
+
+            container.innerHTML = State.cards.map(card => `
+                <div class="w-full max-w-[180px] transform transition-transform hover:scale-105 hover:z-10 cursor-pointer">
+                    ${generateCardHTML(card)}
+                </div>
+            `).join('');
+        }
+
+        // --- 8. Arena 邏輯與渲染 ---
+        window.toggleCardSelection = function(cardId) {
+            const card = State.cards.find(c => c.id === cardId);
+            const existsIdx = State.arena.selectedDeck.findIndex(c => c.id === cardId);
+            
+            if (existsIdx >= 0) {
+                State.arena.selectedDeck.splice(existsIdx, 1);
+            } else if (State.arena.selectedDeck.length < 4) {
+                State.arena.selectedDeck.push(card);
+            }
+            renderArena();
+        }
+
+        window.setArenaView = function(view) {
+            State.arena.view = view;
+            
+            // 如果進入大廳，開始監聽公開房間
+            if (view === 'lobby' && !State.arena.unsubscribeMatchList) {
+                const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
+                State.arena.unsubscribeMatchList = onSnapshot(matchesRef, (snapshot) => {
+                    const allMatches = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    // 篩選等待中的別人的房間
+                    State.arena.rooms = allMatches.filter(m => m.status === 'waiting' && m.player1 !== State.user.uid);
+                    
+                    // 如果我已經在房間，更新狀態
+                    if (State.arena.matchId) {
+                        const myMatch = allMatches.find(m => m.id === State.arena.matchId);
+                        if (myMatch) {
+                            State.arena.matchData = myMatch;
+                            if (myMatch.status === 'playing') State.arena.view = 'room';
+                            
+                            // 結算邏輯
+                            if (myMatch.player1 === State.user.uid && myMatch.status === 'playing') {
+                                if (myMatch.p1State.ready && myMatch.p2State.ready && !myMatch.resolving) {
+                                    resolveRound(myMatch.id, myMatch);
+                                }
+                            }
+                        } else {
+                            // 房間被刪除
+                            State.arena.matchId = null;
+                            State.arena.matchData = null;
+                            State.arena.view = 'lobby';
+                        }
+                    }
+                    if(State.activeTab === 'arena') renderArena();
+                });
+            }
+            renderArena();
+        }
+
+        async function resolveRound(id, match) {
+            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', id);
+            await updateDoc(matchRef, { resolving: true });
+
+            const p1Card = match.p1State.team[match.p1State.currentCardIndex];
+            const p2Card = match.p2State.team[match.p2State.currentCardIndex];
+
+            let p1Dmg = p1Card.atk;
+            let p2Dmg = p2Card.atk;
+
+            // 特殊能力：異界詞彙 (傷害無效)
+            if (p1Card.isRare) p2Dmg = 0;
+            if (p2Card.isRare) p1Dmg = 0;
+
+            const p1Remain = p1Card.hp - p2Dmg;
+            const p2Remain = p2Card.hp - p1Dmg;
+
+            let p1Wins = match.p1State.wins;
+            let p2Wins = match.p2State.wins;
+
+            if (p1Remain > p2Remain) p1Wins++;
+            else if (p2Remain > p1Remain) p2Wins++;
+
+            const nextRound = match.round + 1;
+            const isGameOver = nextRound > 3;
+
+            setTimeout(async () => {
+                await updateDoc(matchRef, {
+                    status: isGameOver ? 'finished' : 'playing',
+                    round: nextRound,
+                    resolving: false,
+                    'p1State.wins': p1Wins, 'p2State.wins': p2Wins,
+                    'p1State.ready': false, 'p2State.ready': false,
+                    'p1State.usedCards': [...match.p1State.usedCards, match.p1State.currentCardIndex],
+                    'p2State.usedCards': [...match.p2State.usedCards, match.p2State.currentCardIndex],
+                    'p1State.currentCardIndex': null, 'p2State.currentCardIndex': null,
+                    lastResult: { round: match.round, p1Card, p2Card, p1Dmg, p2Dmg, p1Remain, p2Remain }
+                });
+            }, 4000);
+        }
+
+        window.createRoom = async function() {
+            const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
+            const newDoc = await addDoc(matchesRef, {
+                status: 'waiting',
+                player1: State.user.uid, p1Name: '玩家 ' + State.user.uid.slice(-4),
+                p1State: { team: State.arena.selectedDeck, currentCardIndex: null, wins: 0, ready: false, usedCards: [] },
+                round: 1, resolving: false, createdAt: Date.now()
+            });
+            State.arena.matchId = newDoc.id;
+            State.arena.view = 'room';
+            renderArena();
+        }
+
+        window.joinRoom = async function(roomId) {
+            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', roomId);
+            await updateDoc(matchRef, {
+                status: 'playing',
+                player2: State.user.uid, p2Name: '玩家 ' + State.user.uid.slice(-4),
+                p2State: { team: State.arena.selectedDeck, currentCardIndex: null, wins: 0, ready: false, usedCards: [] }
+            });
+            State.arena.matchId = roomId;
+            State.arena.view = 'room';
+            renderArena();
+        }
+
+        window.leaveRoom = async function() {
+            if (State.arena.matchId && State.arena.matchData && State.arena.matchData.player1 === State.user.uid && State.arena.matchData.status === 'waiting') {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', State.arena.matchId));
+            }
+            State.arena.matchId = null;
+            State.arena.matchData = null;
+            State.arena.view = 'lobby';
+            renderArena();
+        }
+
+        window.playArenaCard = async function(index) {
+            if(!State.arena.matchId || !State.arena.matchData) return;
+            const isPlayer1 = State.arena.matchData.player1 === State.user.uid;
+            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', State.arena.matchId);
+            
+            if(isPlayer1) await updateDoc(matchRef, { 'p1State.currentCardIndex': index, 'p1State.ready': true });
+            else await updateDoc(matchRef, { 'p2State.currentCardIndex': index, 'p2State.ready': true });
+        }
+
+        function renderArena() {
+            const container = document.getElementById('arena-container');
+            const view = State.arena.view;
+
+            // 畫面 1: 組建牌組
+            if (view === 'deck_select') {
+                const deckHTML = State.arena.selectedDeck.map(card => `
+                    <div class="relative scale-75 origin-top -mx-4 cursor-pointer hover:-translate-y-2 transition-transform shrink-0" onclick="toggleCardSelection('${card.id}')">
+                        <div class="absolute -top-2 -right-2 bg-red-500 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-20 shadow-md">X</div>
+                        ${generateCardHTML(card)}
+                    </div>
+                `).join('');
+
+                const cardsHTML = State.cards.map(card => {
+                    const isSelected = State.arena.selectedDeck.find(c => c.id === card.id);
+                    return `
+                    <div onclick="toggleCardSelection('${card.id}')" class="cursor-pointer transition-all ${isSelected ? 'ring-4 ring-purple-500 scale-95 opacity-50' : 'hover:scale-105'}">
+                        ${generateCardHTML(card)}
+                    </div>`;
+                }).join('');
+
+                container.innerHTML = `
+                <div class="animate-fade-in pb-10">
+                    <h2 class="text-2xl font-black text-center mb-2 text-purple-400">⚔️ 第一步：選擇出戰陣容</h2>
+                    <p class="text-slate-400 text-sm text-center mb-6">點擊下方卡牌選擇 <strong class="text-white text-lg">${State.arena.selectedDeck.length}/4</strong> 張，進入三戰兩勝對決！</p>
+                    
+                    <div class="flex justify-center gap-2 mb-8 min-h-[140px] p-4 bg-slate-800 rounded-xl border-2 border-slate-700 w-full overflow-x-auto shadow-inner no-scrollbar">
+                        ${State.arena.selectedDeck.length === 0 ? '<div class="text-slate-500 my-auto">點擊下方卡牌加入牌組</div>' : deckHTML}
+                    </div>
+
+                    <button onclick="setArenaView('lobby')" ${State.arena.selectedDeck.length !== 4 ? 'disabled' : ''} class="w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex justify-center items-center gap-2 mb-8 ${State.arena.selectedDeck.length === 4 ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'}">
+                        <i class="fas fa-sign-in-alt text-2xl"></i> 進入對戰大廳
+                    </button>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        ${cardsHTML}
+                    </div>
+                </div>`;
+                return;
+            }
+
+            // 畫面 2: 對戰大廳
+            if (view === 'lobby') {
+                const roomsHTML = State.arena.rooms.length === 0 
+                    ? `<div class="text-center text-slate-500 py-10 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">目前沒有其他玩家開房，自己創建一個吧！</div>`
+                    : State.arena.rooms.map(room => `
+                        <div class="bg-slate-800 border border-slate-600 p-4 rounded-xl flex justify-between items-center hover:bg-slate-700 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-slate-900 p-2 rounded-full"><i class="fas fa-spinner fa-spin text-purple-400"></i></div>
+                                <span class="font-bold text-lg">${room.p1Name} <span class="text-slate-400 text-sm font-normal">的擂台</span></span>
+                            </div>
+                            <button onclick="joinRoom('${room.id}')" class="bg-green-600 hover:bg-green-500 px-6 py-2 rounded-lg font-bold shadow-md">
+                                加入對戰
+                            </button>
+                        </div>
+                    `).join('');
+
+                container.innerHTML = `
+                <div class="animate-fade-in w-full max-w-lg mx-auto">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-purple-400"><i class="fas fa-globe"></i> 對戰大廳</h2>
+                        <button onclick="setArenaView('deck_select')" class="text-sm text-slate-400 underline">重新選牌</button>
+                    </div>
+                    <button onclick="createRoom()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl mb-8 flex justify-center items-center gap-2 shadow-lg shadow-indigo-900/50">
+                        <i class="fas fa-plus-circle text-xl"></i> 創建我的房間
+                    </button>
+                    <h3 class="text-slate-400 font-bold mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
+                        <i class="fas fa-swords"></i> 可加入的玩家房間
+                    </h3>
+                    <div class="space-y-3">
+                        ${roomsHTML}
+                    </div>
+                </div>`;
+                return;
+            }
+
+            // 畫面 3: 房間內 (等待 or 戰鬥)
+            if (view === 'room') {
+                const match = State.arena.matchData;
+                if (!match) {
+                    container.innerHTML = `<div class="text-center py-20"><i class="fas fa-spinner fa-spin mx-auto text-purple-500 mb-4 text-4xl"></i><br>載入房間中...</div>`;
+                    return;
+                }
+
+                if (match.status === 'waiting') {
+                    container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-20 animate-fade-in">
+                        <div class="relative mb-8">
+                            <i class="fas fa-spinner fa-spin text-purple-500 text-7xl"></i>
+                            <i class="fas fa-swords absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-300 text-2xl"></i>
+                        </div>
+                        <h2 class="text-3xl font-black mt-6 mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400">房間已建立</h2>
+                        <p class="text-slate-400 mb-10 text-lg">等待其他玩家進入大廳加入你的擂台...</p>
+                        <button onclick="leaveRoom()" class="px-8 py-3 border-2 border-red-500/50 text-red-400 font-bold rounded-full hover:bg-red-900/30 transition-colors">
+                            解散房間並離開
+                        </button>
+                    </div>`;
+                    return;
+                }
+
+                // 戰鬥渲染
+                const isPlayer1 = match.player1 === State.user.uid;
+                const myState = isPlayer1 ? match.p1State : match.p2State;
+                const opState = isPlayer1 ? match.p2State : match.p1State;
+                const isResolving = match.resolving;
+                const isFinished = match.status === 'finished';
+
+                // 生成對手的卡區塊
+                let opCardHTML = '';
+                if (isResolving && match.lastResult) {
+                    const dmg = isPlayer1 ? match.lastResult.p2Dmg : match.lastResult.p1Dmg;
+                    opCardHTML = `
+                        <div class="animate-slide-down relative">
+                            ${generateCardHTML(isPlayer1 ? match.lastResult.p2Card : match.lastResult.p1Card)}
+                            <div class="absolute -bottom-6 right-0 bg-red-600 text-white font-black px-3 py-1 rounded-lg text-2xl rotate-12 shadow-lg border-2 border-white z-20">-${dmg}</div>
+                        </div>`;
+                } else if (opState.ready) {
+                    opCardHTML = `<div class="animate-slide-down">${generateCardHTML({}, true)}</div>`;
+                } else {
+                    opCardHTML = `
+                        <div class="w-full max-w-[200px] aspect-[3/4] border-2 border-dashed border-slate-600 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-800/50 backdrop-blur-sm">
+                            <i class="fas fa-spinner fa-spin mb-2 text-2xl"></i>對手思考中
+                        </div>`;
+                }
+
+                // 生成我的卡區塊
+                let myCardHTML = '';
+                if (isResolving && match.lastResult) {
+                    const dmg = isPlayer1 ? match.lastResult.p1Dmg : match.lastResult.p2Dmg;
+                    myCardHTML = `
+                        <div class="animate-slide-up relative">
+                            ${generateCardHTML(isPlayer1 ? match.lastResult.p1Card : match.lastResult.p2Card)}
+                            <div class="absolute -top-6 right-0 bg-red-600 text-white font-black px-3 py-1 rounded-lg text-2xl -rotate-12 shadow-lg border-2 border-white z-20">-${dmg}</div>
+                        </div>`;
+                } else if (myState.ready) {
+                    myCardHTML = `<div class="animate-slide-up">${generateCardHTML(myState.team[myState.currentCardIndex])}</div>`;
+                } else {
+                    myCardHTML = `
+                        <div class="w-full max-w-[200px] aspect-[3/4] border-2 border-dashed border-indigo-500 rounded-xl flex items-center justify-center text-indigo-400 bg-indigo-900/20 font-bold backdrop-blur-sm">
+                            ⬆️ 請從下方出牌
+                        </div>`;
+                }
+
+                // 手牌區塊
+                let handCardsHTML = '';
+                if (!isFinished) {
+                    handCardsHTML = `
+                        <div class="w-full mt-4 transition-opacity duration-300 ${myState.ready || isResolving ? 'opacity-40 pointer-events-none' : 'opacity-100'} pb-10">
+                            <p class="text-center font-bold text-slate-300 mb-3 bg-slate-800 py-1 rounded-full border border-slate-700 max-w-[200px] mx-auto">
+                                ${myState.ready ? '等待對手出牌...' : '點擊選擇你要出的牌'}
+                            </p>
+                            <div class="flex justify-center gap-2 overflow-x-auto px-2 no-scrollbar min-h-[140px] items-end">
+                                ${myState.team.map((card, idx) => {
+                                    const isUsed = myState.usedCards.includes(idx);
+                                    const isCurrent = myState.currentCardIndex === idx;
+                                    return `
+                                    <div onclick="!${isUsed} && !${myState.ready} && playArenaCard(${idx})"
+                                         class="transform transition-all w-[100px] shrink-0
+                                            ${isUsed ? 'opacity-20 grayscale cursor-not-allowed scale-90' : 'cursor-pointer hover:-translate-y-4 hover:scale-105'}
+                                            ${isCurrent ? 'ring-4 ring-indigo-500 -translate-y-4 rounded-xl' : ''}
+                                         ">
+                                        <div class="scale-[0.55] origin-bottom -mx-8 -mb-16 pointer-events-none">
+                                            ${generateCardHTML(card)}
+                                        </div>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                        </div>`;
+                }
+
+                // 結算畫面
+                let finishHTML = '';
+                if (isFinished) {
+                    const won = myState.wins > opState.wins;
+                    const lost = opState.wins > myState.wins;
+                    finishHTML = `
+                        <div class="w-full bg-slate-800 border-2 border-purple-500 rounded-xl p-6 text-center animate-zoom-in shadow-xl mt-4 z-30 relative mb-10">
+                            <h2 class="text-4xl font-black mb-6 flex items-center justify-center gap-2">
+                                ${won ? '<i class="fas fa-trophy text-yellow-400"></i> 勝利！' : lost ? '<i class="fas fa-skull text-red-400"></i> 敗北' : '🤝 平局！'}
+                            </h2>
+                            <button onclick="leaveRoom()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-12 rounded-full shadow-lg text-lg">
+                                返回大廳
+                            </button>
+                        </div>`;
+                }
+
+                container.innerHTML = `
+                <div class="flex flex-col h-full items-center w-full max-w-lg mx-auto animate-fade-in relative">
+                    <!-- 計分板 -->
+                    <div class="w-full flex justify-between items-center mb-4 bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-lg relative z-20">
+                        <div class="flex flex-col items-center text-blue-400 font-bold w-1/3">
+                            <span class="text-sm mb-1 text-slate-300">我方</span>
+                            <span class="text-3xl bg-slate-800 w-16 h-12 flex items-center justify-center rounded-lg border border-slate-600">🏆 ${myState.wins}</span>
+                        </div>
+                        <div class="flex flex-col items-center w-1/3">
+                            <span class="text-xs text-slate-500 tracking-widest uppercase font-bold mb-1">Round</span>
+                            <span class="text-4xl font-black text-white">${Math.min(match.round, 3)}<span class="text-xl text-slate-600">/3</span></span>
+                        </div>
+                        <div class="flex flex-col items-center text-red-400 font-bold w-1/3">
+                            <span class="text-sm mb-1 text-slate-300">對手</span>
+                            <span class="text-3xl bg-slate-800 w-16 h-12 flex items-center justify-center rounded-lg border border-slate-600">🏆 ${opState.wins}</span>
+                        </div>
+                    </div>
+
+                    <!-- 戰鬥舞台 -->
+                    <div class="w-full flex flex-col justify-between items-center relative py-8 my-2 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[400px]">
+                        
+                        <!-- 對手出牌區 -->
+                        <div class="w-full flex justify-center transform scale-[0.8] absolute top-2">
+                            ${opCardHTML}
+                        </div>
+
+                        <!-- 衝突特效 -->
+                        <div class="z-10 flex items-center justify-center bg-black/80 rounded-full p-5 border border-slate-700 shadow-[0_0_30px_rgba(0,0,0,0.8)] relative my-auto backdrop-blur-md">
+                            <i class="fas fa-swords text-3xl text-purple-500 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]"></i>
+                            ${isResolving && match.lastResult ? `<div class="absolute -right-28 w-24 text-center text-xs font-bold bg-purple-900/80 p-1.5 rounded border border-purple-500 text-white animate-zoom-in">卡牌交鋒！</div>` : ''}
+                        </div>
+
+                        <!-- 我方出牌區 -->
+                        <div class="w-full flex justify-center transform scale-[0.8] absolute bottom-2">
+                            ${myCardHTML}
+                        </div>
+                    </div>
+
+                    <!-- 底部手牌或結算 -->
+                    ${isFinished ? finishHTML : handCardsHTML}
+                </div>`;
+            }
+        }
+
+        // --- 9. 全域鍵盤監聽 ---
+        document.addEventListener('keydown', (e) => {
+            if (State.activeTab !== 'hangman') return;
+            
+            if (State.hangman.status === 'playing') {
+                if (/^[a-zA-Z]$/.test(e.key)) {
+                    handleGuess(e.key.toUpperCase());
+                }
+            } else if ((State.hangman.status === 'won' || State.hangman.status === 'lost') && e.key === 'Enter') {
+                initHangmanGame();
+            }
+        });
+
+        // --- 10. 初始化與登入綁定 ---
+        async function initApp() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth Error:", err);
+                document.getElementById('loading-text').innerText = "登入失敗，請重整頁面";
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                State.user = user;
+                document.getElementById('global-loading').classList.add('hidden');
+                initHangmanGame(); // 開始遊戲
+
+                // 綁定卡牌資料監聽
+                const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
+                onSnapshot(cardsRef, (snapshot) => {
+                    const loadedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    loadedCards.sort((a, b) => b.createdAt - a.createdAt);
+                    State.cards = loadedCards;
+                    updateUI();
+                    
+                    if (State.activeTab === 'library') renderLibrary();
+                    // 若在選牌畫面且卡牌更新，重新渲染
+                    if (State.activeTab === 'arena' && State.arena.view === 'deck_select') renderArena();
+                });
+            } else {
+                State.user = null;
+            }
+        });
+
+        // 啟動
+        initApp();
+
+    </script>
+</body>
+</html>
