@@ -1,936 +1,2151 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>單字卡牌大亂鬥 - Word Arena</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <style>
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes slideInDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes zoomIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        .animate-slide-up { animation: slideInUp 0.4s ease-out forwards; }
-        .animate-slide-down { animation: slideInDown 0.4s ease-out forwards; }
-        .animate-zoom-in { animation: zoomIn 0.3s ease-out forwards; }
-        
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>單字大亂鬥 · Word Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{
+  --bg:#09090f;--bg2:#11111d;--bg3:#1a1a2e;
+  --border:#2a2a45;--accent:#7c6aff;--accent2:#ff6ab0;
+  --text:#e8e8f8;--muted:#6b6b9a;--danger:#ff4d6d;--ok:#00d68f;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);
+     display:flex;flex-direction:column;-webkit-tap-highlight-color:transparent}
+.ko{font-family:'Black Han Sans',sans-serif}
+.scr{overflow-y:auto;overflow-x:hidden}
+.scr::-webkit-scrollbar{width:3px}
+.scr::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+
+/* ── layout ── */
+#hdr{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);
+     padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:100}
+#main{flex:1;overflow:hidden;position:relative}
+.view{position:absolute;inset:0;display:none;flex-direction:column}
+.view.on{display:flex}
+#nav{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;z-index:100}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:10px 4px 8px;gap:3px;border:none;background:none;color:var(--muted);
+    font-size:10px;cursor:pointer;font-family:inherit;transition:color .2s;position:relative}
+.nb.on{color:var(--accent)}
+.nb.lk{opacity:.3;cursor:not-allowed}
+.nbadge{position:absolute;top:5px;right:calc(50% - 22px);background:var(--danger);
+        color:#fff;font-size:9px;font-weight:900;width:15px;height:15px;border-radius:50%;
+        display:none;align-items:center;justify-content:center}
+
+/* ── toast ── */
+#twrap{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:9999;
+       display:flex;flex-direction:column;gap:6px;width:min(92vw,340px);pointer-events:none}
+.toast{background:var(--bg3);border:1px solid var(--border);padding:10px 16px;
+       border-radius:999px;font-size:13px;font-weight:700;
+       display:flex;align-items:center;gap:8px;
+       animation:tIn .3s ease;box-shadow:0 8px 24px #0009}
+@keyframes tIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* ── cards ── */
+.ci{width:100%;height:100%;display:flex;flex-direction:column;padding:8px 7px 7px;
+    background:var(--bg2);border:2px solid var(--border);border-radius:14px;
+    position:relative;overflow:hidden}
+.ci::before{content:'';position:absolute;inset:0;
+            background:radial-gradient(ellipse at 50% 0%,var(--cg,transparent) 0%,transparent 70%);
+            pointer-events:none}
+.cstars{display:flex;gap:2px;justify-content:center;margin-bottom:4px}
+.cword{font-family:'Black Han Sans',sans-serif;text-align:center;letter-spacing:2px;
+       color:#fff;flex:1;display:flex;align-items:center;justify-content:center;
+       line-height:1.1;text-shadow:0 2px 14px var(--cg,transparent)}
+.ctr{font-size:10px;text-align:center;color:var(--muted);margin-bottom:3px;line-height:1.3;
+     overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical}
+.cchip{font-size:8px;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:999px;
+       border:1px solid;align-self:center;margin-bottom:5px}
+.cstats{display:flex;justify-content:space-between;background:#ffffff08;border-radius:7px;
+        padding:4px 7px;font-size:11px;font-weight:800;border:1px solid #ffffff08}
+.shp{color:#ff6b6b}.satk{color:#74b9ff}
+.s1{--cg:#94a3b828;border-color:#94a3b842!important}
+.s2{--cg:#4ade8035;border-color:#4ade8050!important}
+.s3{--cg:#60a5fa38;border-color:#60a5fa52!important}
+.s4{--cg:#a78bfa48;border-color:#a78bfa60!important}
+.s5{--cg:#fb923c58;border-color:#fb923c6a!important}
+.s6{--cg:#facc1565;border-color:#facc1578!important;box-shadow:0 0 20px #facc1518}
+
+#hm-inner{
+  display:flex;flex-direction:column;align-items:center;
+  padding:clamp(10px,2vh,24px) clamp(12px,4vw,48px) 16px;
+  overflow-y:auto;flex:1;gap:clamp(8px,1.5vh,16px);
+}
+#hm-status{
+  font-size:clamp(12px,1.8vw,16px);
+  color:var(--muted);letter-spacing:1px;font-weight:700;
+}
+/* 單一置中欄，所有內容在這裡堆疊 */
+#hm-center{
+  display:flex;flex-direction:column;align-items:center;
+  gap:clamp(8px,1.5vh,18px);
+  width:100%;max-width:min(640px,96vw);
+}
+/* hm-left/right 變成透明 passthrough */
+#hm-left,#hm-right{
+  display:contents;
+}
+/* 絞刑台 */
+#gallows{
+  display:flex;align-items:center;justify-content:center;
+  width:clamp(140px,30vw,300px);
+}
+#gallows svg{
+  width:100%!important;height:auto!important;
+}
+/* 字母格 */
+#wdisp{
+  display:flex;gap:clamp(5px,1.2vw,14px);
+  flex-wrap:wrap;justify-content:center;width:100%;
+}
+.lslot{
+  width:clamp(30px,5vw,62px);
+  height:clamp(38px,6.5vw,78px);
+  border-bottom:clamp(2px,.35vw,4px) solid var(--muted);
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:clamp(2px,.5vw,7px);
+  font-family:'Black Han Sans',sans-serif;
+  font-size:clamp(17px,3.5vw,44px);
+  color:#fff;transition:border-color .2s;
+}
+.lslot.rev{border-color:var(--accent)}
+/* 鍵盤 — 7欄 grid 撐滿 hm-center 欄寬 */
+#kb{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:clamp(5px,.9vw,10px);
+  width:100%;
+}
+.key{
+  aspect-ratio:1;
+  border-radius:clamp(6px,1vw,14px);
+  border:1px solid var(--border);
+  background:var(--bg3);color:var(--text);
+  font-family:'Black Han Sans',sans-serif;
+  font-size:clamp(13px,2.2vw,26px);
+  cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.key:active{transform:scale(.88)}
+.key.hit{background:var(--accent);border-color:var(--accent);color:#fff}
+.key.miss{background:var(--bg2);border-color:#222233;color:var(--muted);cursor:default;opacity:.4}
+
+/* ── result overlay ── */
+#roverlay{
+  position:absolute;inset:0;z-index:50;background:var(--bg);display:none;
+  flex-direction:column;align-items:center;overflow-y:auto;
+  padding:clamp(12px,2vh,24px) clamp(12px,3vw,24px) 88px;
+}
+#roverlay.on{display:flex}
+#roverlay>#rcontent{width:100%;max-width:min(520px,96vw)}
+
+/* ── library ── */
+#libgrid{
+  flex:1;overflow-y:auto;
+  padding:clamp(8px,1.5vw,16px);
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(clamp(100px,18vw,160px),1fr));
+  gap:clamp(7px,1.5vw,14px);
+  align-content:start;
+}
+.cw{aspect-ratio:3/4;border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .2s}
+.cw:hover{transform:translateY(-4px)}
+
+/* ── modal ── */
+#mbg{position:fixed;inset:0;z-index:200;background:#000c;backdrop-filter:blur(8px);
+     display:none;align-items:center;justify-content:center}
+#mbg.on{display:flex}
+#mbox{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:clamp(16px,3vw,24px);
+  width:min(96vw,520px);max-height:90vh;overflow-y:auto;
+  padding:clamp(14px,2.5vw,24px);
+  animation:zIn .3s cubic-bezier(.22,.68,0,1.2);
+}
+@keyframes zIn{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}
+.dsec{background:var(--bg3);border-radius:12px;padding:clamp(10px,1.8vw,16px);margin-bottom:10px;border:1px solid var(--border)}
+.dlbl{font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:8px;text-transform:uppercase}
+.ptag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;
+      background:#7c6aff25;color:var(--accent);border:1px solid #7c6aff40;margin-bottom:5px}
+.ddef{font-size:clamp(12px,1.8vw,14px);color:var(--text);line-height:1.65;margin-bottom:2px}
+.dzh{font-size:clamp(11px,1.6vw,13px);color:var(--muted);margin-bottom:2px}
+.dex{font-size:clamp(11px,1.6vw,13px);color:var(--muted);font-style:italic;margin-top:2px;
+     padding-left:8px;border-left:2px solid var(--border)}
+
+/* ── arena ── */
+#arena-inner{flex:1;overflow-y:auto;padding:clamp(10px,2vw,20px) clamp(12px,3vw,28px) 16px}
+#arena-inner>*{max-width:min(640px,100%);margin-left:auto;margin-right:auto}
+.mcard{background:var(--bg2);border:1px solid var(--border);border-radius:16px;
+       padding:clamp(14px,2.5vw,22px);display:flex;align-items:center;gap:14px;cursor:pointer;
+       transition:all .2s;margin-bottom:10px}
+.mcard:hover{border-color:var(--accent);background:var(--bg3)}
+.mico{width:clamp(44px,6vw,56px);height:clamp(44px,6vw,56px);border-radius:14px;
+      display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dslot{background:var(--bg3);border:2px dashed var(--border);border-radius:12px;
+       aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.hand-row{display:flex;gap:clamp(6px,1.2vw,12px);overflow-x:auto;padding:5px 2px}
+.hand-row::-webkit-scrollbar{display:none}
+.hcard{width:clamp(68px,10vw,100px);flex-shrink:0;cursor:pointer;transition:transform .2s}
+.hcard:hover{transform:translateY(-6px)}
+.hcard.used{opacity:.22;cursor:not-allowed}
+.hcard.sel{transform:translateY(-10px);outline:3px solid var(--accent);border-radius:14px}
+.rinput{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+        padding:clamp(10px,1.8vw,14px) 16px;
+        font-size:clamp(18px,3vw,24px);font-family:'Black Han Sans',sans-serif;
+        letter-spacing:6px;color:#fff;width:100%;text-align:center;text-transform:uppercase}
+.rinput:focus{outline:none;border-color:var(--accent)}
+.rcode{font-family:'Black Han Sans',sans-serif;font-size:clamp(28px,5vw,40px);letter-spacing:10px;
+       color:var(--accent);text-align:center;padding:10px}
+
+/* ── buttons ── */
+.btn{border:none;border-radius:12px;
+     padding:clamp(10px,1.8vw,14px) clamp(14px,2.5vw,22px);
+     font-size:clamp(13px,1.8vw,15px);
+     font-family:inherit;font-weight:700;cursor:pointer;transition:all .2s;
+     display:flex;align-items:center;justify-content:center;gap:7px}
+.btn:active{transform:scale(.95)}
+.btnp{background:var(--accent);color:#fff}
+.btnp:hover{filter:brightness(1.12)}
+.btns{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── nav responsive ── */
+#nav{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;z-index:100}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:clamp(8px,1.5vw,12px) 4px;gap:3px;border:none;background:none;color:var(--muted);
+    font-size:clamp(9px,1.4vw,12px);cursor:pointer;font-family:inherit;transition:color .2s;position:relative}
+.nb.on{color:var(--accent)}
+.nb.lk{opacity:.3;cursor:not-allowed}
+.nb svg{width:clamp(18px,3vw,26px);height:clamp(18px,3vw,26px)}
+.nbadge{position:absolute;top:5px;right:calc(50% - 22px);background:var(--danger);
+        color:#fff;font-size:9px;font-weight:900;width:15px;height:15px;border-radius:50%;
+        display:none;align-items:center;justify-content:center}
+
+/* ── header responsive ── */
+#hdr{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);
+     padding:clamp(8px,1.5vw,12px) clamp(12px,2.5vw,24px);
+     display:flex;align-items:center;justify-content:space-between;z-index:100}
+
+/* ── misc ── */
+.dvd{height:1px;background:var(--border);margin:10px 0}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid}
+@keyframes cdrop{from{transform:translateY(-36px) rotate(-4deg);opacity:0}to{transform:none;opacity:1}}
+.cdrop{animation:cdrop .5s cubic-bezier(.22,.68,0,1.2) forwards}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+.splash{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;
+        flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+@keyframes cardFlip{from{transform:rotateY(90deg) scale(.8);opacity:0}to{transform:none;opacity:1}}
+@keyframes dmgPop{0%{transform:scale(0) translateY(4px);opacity:0}60%{transform:scale(1.3) translateY(-2px)}100%{transform:none;opacity:1}}
+</style>
 </head>
-<body class="bg-[#0f172a] text-white font-sans selection:bg-indigo-500/30 min-h-screen relative pb-20">
+<body>
 
-    <!-- 全域通知容器 -->
-    <div id="toast-container" class="fixed top-16 left-1/2 transform -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none w-[90%] max-w-sm"></div>
+<!-- Splash -->
+<div class="splash" id="splash">
+  <div class="ko" style="font-size:44px;background:linear-gradient(135deg,#7c6aff,#ff6ab0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:4px">WORD ARENA</div>
+  <div style="color:var(--muted);font-size:13px">單字卡牌對戰</div>
+  <div style="margin-top:20px;color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px">
+    <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c6aff" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    初始化中…
+  </div>
+</div>
 
-    <!-- 全域載入畫面 (防卡死機制) -->
-    <div id="global-loading" class="fixed inset-0 bg-[#0f172a] z-[100] flex flex-col items-center justify-center gap-4 transition-opacity duration-300">
-        <div class="relative">
-            <i id="loading-spinner" class="fas fa-spinner fa-spin text-6xl text-indigo-500"></i>
+<!-- Header -->
+<div id="hdr">
+  <div class="ko" style="font-size:18px;background:linear-gradient(135deg,#7c6aff,#ff6ab0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px">WORD ARENA</div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+    卡牌
+    <span id="hcount" style="font-weight:900;color:#fff;background:var(--bg3);padding:2px 10px;border-radius:999px;border:1px solid var(--border)">0</span>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- HANGMAN -->
+  <div class="view on" id="view-hangman">
+    <div id="hm-inner">
+      <div id="hm-status"></div>
+      <div id="hm-center">
+        <div id="hm-left">
+          <div id="gallows"></div>
         </div>
-        <p id="loading-text" class="text-xl font-bold tracking-wider mt-4">正在連線至伺服器...</p>
-        <p id="loading-subtext" class="text-sm text-slate-400 max-w-xs text-center hidden"></p>
-        <button id="force-start-btn" class="hidden mt-6 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-full font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 flex items-center gap-2">
-            <i class="fas fa-sign-in-alt"></i> 強制進入 (單機模式)
-        </button>
+        <div id="hm-right">
+          <div id="wdisp"></div>
+          <div id="hint" style="font-size:11px;color:var(--muted);min-height:14px"></div>
+          <div id="kb"></div>
+        </div>
+      </div>
     </div>
+    <div id="roverlay"><div id="rcontent" style="width:100%;max-width:min(520px,96vw)"></div></div>
+  </div>
 
-    <!-- 頂部導航 -->
-    <header class="bg-[#1e293b] p-4 border-b border-slate-700/50 flex justify-between items-center sticky top-0 z-50 shadow-md">
-        <h1 class="text-xl font-black flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-            <i class="fas fa-layer-group text-indigo-400"></i> 單字大亂鬥 <span class="text-xs text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-500/30">AI百科版</span>
-        </h1>
-        <div class="text-xs text-slate-300">
-            收集: <span id="total-cards-count" class="font-bold text-white text-sm">0</span> 張
-        </div>
-    </header>
-
-    <!-- 卡牌詳細資訊 Modal -->
-    <div id="card-modal" class="hidden fixed inset-0 z-[150] bg-[#0f172a]/90 backdrop-blur-md flex items-center justify-center p-4 transition-opacity">
-        <div class="bg-[#1e293b] border border-slate-600 rounded-3xl w-full max-w-md p-6 shadow-2xl animate-zoom-in relative max-h-[90vh] overflow-y-auto no-scrollbar">
-            <button onclick="closeCardModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
-                <i class="fas fa-times text-lg"></i>
-            </button>
-            <div id="card-modal-content" class="flex flex-col items-center pt-4">
-                <!-- 內容由 JS 動態生成 -->
-            </div>
-        </div>
+  <!-- LIBRARY -->
+  <div class="view" id="view-library">
+    <div style="padding:10px 14px 6px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <span style="font-weight:800;font-size:15px">卡牌庫</span>
+      <span style="font-size:11px;color:var(--muted)">點擊卡牌查看字義</span>
     </div>
+    <div id="libgrid"></div>
+  </div>
 
-    <!-- 主視圖區塊 -->
-    <main class="max-w-4xl mx-auto p-4 relative w-full h-full min-h-[calc(100vh-140px)]">
-        
-        <!-- 視圖 1: 猜單字 (Hangman) -->
-        <div id="view-hangman" class="animate-fade-in w-full">
-            <div id="hangman-container" class="flex flex-col items-center justify-center max-w-lg mx-auto w-full"></div>
+  <!-- ARENA -->
+  <div class="view" id="view-arena">
+    <div style="padding:10px 14px 6px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <span style="font-weight:800;font-size:15px">競技場</span>
+      <button class="btn btns" style="font-size:11px;padding:5px 10px" onclick="aBack()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        返回
+      </button>
+    </div>
+    <div id="arena-inner" class="scr"></div>
+  </div>
+</div>
+
+<!-- Nav -->
+<div id="nav">
+  <button class="nb on" id="nb-hangman" onclick="goTab('hangman')">
+    <!-- skull SVG -->
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7.03 2 3 6.03 3 11c0 2.97 1.4 5.62 3.59 7.33V20a1 1 0 001 1h8.82a1 1 0 001-1v-1.67C19.6 16.62 21 13.97 21 11c0-4.97-4.03-9-9-9zm-2.5 14.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm5 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg>
+    猜單字
+  </button>
+  <button class="nb lk" id="nb-library" onclick="goTab('library')">
+    <!-- layers SVG -->
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    卡牌庫
+    <span class="nbadge" id="nbadge">0</span>
+  </button>
+  <button class="nb lk" id="nb-arena" onclick="goTab('arena')">
+    <!-- swords SVG -->
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6 2 2-6 6z"/><path d="M3 21l4-4"/><path d="M5 11L19 5l-6 14-3-5z" style="display:none"/></svg>
+    競技場
+  </button>
+</div>
+
+<!-- Card Modal -->
+<div id="mbg" onclick="cModal()">
+  <div id="mbox" onclick="event.stopPropagation()"><div id="mcontent"></div></div>
+</div>
+
+<!-- Toast container -->
+<div id="twrap"></div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════
+// SVG ICON HELPERS (inline, no CDN)
+// ════════════════════════════════
+const ICO = {
+  spin: `<svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
+  check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  info:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  warn:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  book:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>`,
+  globe: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`,
+  chart: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  plus:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  x:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  back:  `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
+  copy:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
+  wifi:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 16 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/></svg>`,
+  robot: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V7"/><circle cx="12" cy="5" r="2"/><line x1="8" y1="15" x2="8.01" y2="15" stroke-width="3"/><line x1="16" y1="15" x2="16.01" y2="15" stroke-width="3"/><path d="M7 11V9a5 5 0 0110 0v2"/></svg>`,
+  chevR:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>`,
+  door: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  enter:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>`,
+  refresh:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>`,
+  heart: `<svg width="11" height="11" viewBox="0 0 24 24" fill="#ff6b6b"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z"/></svg>`,
+  bolt:  `<svg width="10" height="10" viewBox="0 0 24 24" fill="#74b9ff"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  star:  (filled, col) => `<svg width="10" height="10" viewBox="0 0 24 24" fill="${filled?col:'#2a2a45'}" stroke="${filled?col:'#2a2a45'}" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+};
+
+// ════════════════════════════════
+// STATE
+// ════════════════════════════════
+const S = {
+  cards:[], unlockedLib:false, tab:'hangman',
+  hm:{ status:'idle', word:'', guessed:new Set(), mistakes:0, maxMistakes:6, errors:0, details:null, newCard:null,
+       hint:null,          // { category, revealed_letter, letterIdx }
+       hintPenalty:0,      // 累積扣減 0..1
+       hintUsed:{ cat:false, letters:[] }  // 已用過的提示
+  },
+  ar:{
+    phase:'mode', deck:[], _mode:'ai',
+    ai:{hand:[],used:new Set()}, pl:{hand:[],used:new Set()},
+    round:1, plW:0, aiW:0, rr:null,
+    peer:null, conn:null, isHost:false, roomCode:'',
+    np:{hand:[],used:new Set(),wins:0,sel:null},
+    no:{hand:[],used:new Set(),wins:0,sel:null,ready:false},
+    netRound:1, netRR:null,
+  }
+};
+
+// ════════════════════════════════
+// PERSIST
+// ════════════════════════════════
+function save(){
+  try{ localStorage.setItem('wa_v4', JSON.stringify({cards:S.cards,ul:S.unlockedLib})); }catch(e){}
+}
+function load(){
+  try{
+    const d = JSON.parse(localStorage.getItem('wa_v4')||'null');
+    if(d){ S.cards=d.cards||[]; S.unlockedLib=!!d.ul; }
+    if(S.cards.length) S.unlockedLib=true;
+  }catch(e){ S.cards=[]; }
+}
+
+// ════════════════════════════════
+// TOAST
+// ════════════════════════════════
+function toast(msg, type='info'){
+  const el=document.createElement('div');
+  const ico = type==='error' ? ICO.warn : type==='ok' ? ICO.check : ICO.info;
+  const col = type==='error' ? '#ff4d6d' : type==='ok' ? '#00d68f' : '#7c6aff';
+  el.className='toast';
+  el.innerHTML=`<span style="color:${col};flex-shrink:0">${ico}</span>${msg}`;
+  document.getElementById('twrap').appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 2800);
+}
+
+// ════════════════════════════════
+// CEFR
+// ════════════════════════════════
+const CEFR_LIST=['A1','A2','B1','B2','C1','C2'];
+function c2s(c){ return Math.max(1, CEFR_LIST.indexOf(c)+1) || 1; }
+function cCol(c){ return {A1:'#94a3b8',A2:'#4ade80',B1:'#60a5fa',B2:'#a78bfa',C1:'#fb923c',C2:'#facc15'}[c]||'#6b6b9a'; }
+function cBg(c){  return {A1:'#94a3b810',A2:'#4ade8015',B1:'#60a5fa15',B2:'#a78bfa18',C1:'#fb923c18',C2:'#facc1520'}[c]||'#6b6b9a10'; }
+function estCEFR(w){
+  const l=w.length;
+  return l<=3?'A1':l===4?'A1':l===5?'A2':l===6?'B1':l===7?'B2':l===8?'C1':'C2';
+}
+
+// ════════════════════════════════
+// WORD SOURCE — 累積擴展難度
+// ════════════════════════════════
+const TOPICS = ['animal','technology','science','space','ocean','history','medicine',
+  'music','food','sports','geography','art','nature','architecture','philosophy',
+  'psychology','law','biology','chemistry','weather','literature','economy','politics'];
+
+// 概念：難度是「機率分佈的擴展」，不是「切換」
+// 卡片越多，高字長的機率權重越高，但低字長永遠保留一定份額
+//
+// 用卡數 n 動態計算每個字長的權重：
+//   base weight 固定給每個長度，bonus weight 隨卡數成長
+//
+// 字長 4: 一直有 20% 基礎份額（永遠保留）
+// 字長 5: 一直有 18% 基礎份額
+// 字長 6: 基礎 16% + 隨卡數輕微增加
+// 字長 7-11: 基礎很低，但隨卡數顯著增加
+function calcLengthWeights(){
+  const n = S.cards.length;
+  // 卡數影響係數 0~1（0張=0, 30張以上=1.0）
+  const t = Math.min(1, n / 30);
+
+  // [字長, 基礎權重, 隨t增加的額外權重]
+  const spec = [
+    [4,  20,  0 ],  // 短字永遠保留，不因難度消失
+    [5,  18,  0 ],
+    [6,  16,  4 ],
+    [7,  12,  10],
+    [8,   8,  16],
+    [9,   4,  14],
+    [10,  2,  10],
+    [11,  1,   6],
+  ];
+
+  return spec.map(([l, base, bonus]) => ({ l, w: base + bonus * t }));
+}
+
+function pickWeightedLength(){
+  const weights = calcLengthWeights();
+  const total = weights.reduce((s,x)=>s+x.w, 0);
+  let r = Math.random() * total;
+  for(const {l,w} of weights){ r-=w; if(r<=0) return l; }
+  return weights[weights.length-1].l;
+}
+
+// 已收集單字集合（全小寫），用於去重
+function getOwnedWords(){
+  return new Set(S.cards.map(c=>(c.wordLower||c.word.toLowerCase())));
+}
+
+async function getRandWord(){
+  const targetLen = pickWeightedLength();
+  const owned = getOwnedWords();
+  const MAX_TRIES = 3; // 最多試幾次去重
+
+  for(let attempt=0; attempt<MAX_TRIES; attempt++){
+    let candidate = '';
+
+    // 70% datamuse
+    if(Math.random() < 0.7){
+      try{
+        const t = TOPICS[~~(Math.random()*TOPICS.length)];
+        const mode = Math.random()<.5 ? 'ml' : 'rel_trg';
+        const r = await fetch(
+          `https://api.datamuse.com/words?${mode}=${t}&max=200`,
+          {signal:AbortSignal.timeout(5000)}
+        );
+        const d = await r.json();
+        // 過濾：字母only、長度範圍、未擁有
+        const exact = d.filter(x => /^[a-z]+$/.test(x.word)
+          && x.word.length===targetLen && !owned.has(x.word));
+        const near  = d.filter(x => /^[a-z]+$/.test(x.word)
+          && Math.abs(x.word.length-targetLen)<=1
+          && x.word.length>=4 && x.word.length<=11
+          && !owned.has(x.word));
+        const pool = exact.length ? exact : near;
+        if(pool.length){
+          candidate = pool[~~(Math.random()*Math.min(pool.length,60))].word;
+        }
+      }catch(e){}
+    }
+
+    // 30% random-word-api（或 datamuse 失敗時）
+    if(!candidate){
+      try{
+        const len = targetLen + (attempt>0 ? (Math.random()<.5?1:-1) : 0);
+        const safeLen = Math.max(4, Math.min(11, len));
+        const r = await fetch(
+          `https://random-word-api.herokuapp.com/word?length=${safeLen}`,
+          {signal:AbortSignal.timeout(5000)}
+        );
+        const d = await r.json();
+        if(d?.[0] && !owned.has(d[0])) candidate = d[0];
+      }catch(e){}
+    }
+
+    if(candidate && !owned.has(candidate)) return candidate;
+    // 如果抽到重複字，繼續下一次嘗試（換不同字長）
+  }
+
+  // 備援池（也過濾已擁有）
+  const allFallbacks = [
+    'fish','lake','farm','city','bird','rain','moon','wind','book','fold','myth','lamp','frog','drum',
+    'brave','storm','flame','proud','crown','frost','magic','night','globe','swift','grace','pearl',
+    'science','freedom','courage','ancient','mystery','harvest','witness','shelter','current','balance',
+    'ephemeral','labyrinth','melancholy','wanderlust','serendipity','eloquence','soliloquy','resilience',
+  ];
+  const fresh = allFallbacks.filter(w=>!owned.has(w));
+  if(fresh.length) return fresh[~~(Math.random()*fresh.length)];
+  // 全都有了（不太可能），隨便給一個
+  return allFallbacks[~~(Math.random()*allFallbacks.length)];
+}
+
+// ════════════════════════════════
+// DICT LOOKUP — PARALLEL, ROBUST
+// ════════════════════════════════
+
+// Safe fetch with timeout, returns null on failure
+async function sfetch(url, ms=6000){
+  try{
+    const r = await fetch(url, {signal:AbortSignal.timeout(ms)});
+    if(!r.ok) return null;
+    return r;
+  }catch(e){ return null; }
+}
+
+async function getDictData(word){
+  // Free Dictionary API
+  const r = await sfetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+  if(!r) return null;
+  try{
+    const d = await r.json();
+    if(!d?.[0]) return null;
+    return {
+      phonetic: d[0].phonetic || d[0].phonetics?.find(p=>p.text)?.text || '',
+      meanings: d[0].meanings.map(m=>({
+        partOfSpeech: m.partOfSpeech,
+        definitions: m.definitions.slice(0,3).map(dd=>({def:dd.definition||'',example:dd.example||'',zh:''}))
+      }))
+    };
+  }catch(e){ return null; }
+}
+
+// ── 本地 CEFR 對照表（Cambridge / Oxford 來源，800+ 字）──
+const CEFR_DB = {
+  // A1
+  a:'A1',able:'A1',about:'A1',above:'A1',across:'A1',after:'A1',again:'A1',age:'A1',ago:'A1',
+  all:'A1',also:'A1',always:'A1',am:'A1',an:'A1',and:'A1',answer:'A1',any:'A1',are:'A1',
+  arm:'A1',arrive:'A1',as:'A1',ask:'A1',at:'A1',away:'A1',baby:'A1',back:'A1',bad:'A1',
+  bag:'A1',ball:'A1',be:'A1',because:'A1',bed:'A1',big:'A1',bike:'A1',bird:'A1',black:'A1',
+  blue:'A1',book:'A1',both:'A1',boy:'A1',bread:'A1',brother:'A1',bus:'A1',but:'A1',buy:'A1',
+  by:'A1',call:'A1',can:'A1',car:'A1',cat:'A1',chair:'A1',child:'A1',city:'A1',class:'A1',
+  close:'A1',cold:'A1',come:'A1',computer:'A1',cook:'A1',country:'A1',day:'A1',do:'A1',
+  dog:'A1',door:'A1',down:'A1',draw:'A1',drink:'A1',drive:'A1',eat:'A1',end:'A1',English:'A1',
+  every:'A1',eye:'A1',face:'A1',family:'A1',fast:'A1',father:'A1',find:'A1',fine:'A1',
+  fish:'A1',floor:'A1',fly:'A1',food:'A1',foot:'A1',for:'A1',free:'A1',friend:'A1',from:'A1',
+  fruit:'A1',fun:'A1',game:'A1',garden:'A1',get:'A1',girl:'A1',give:'A1',go:'A1',good:'A1',
+  great:'A1',green:'A1',hand:'A1',happy:'A1',have:'A1',he:'A1',head:'A1',help:'A1',her:'A1',
+  here:'A1',hi:'A1',his:'A1',home:'A1',hot:'A1',house:'A1',how:'A1',hungry:'A1',I:'A1',
+  in:'A1',into:'A1',is:'A1',it:'A1',just:'A1',key:'A1',know:'A1',large:'A1',last:'A1',
+  late:'A1',learn:'A1',left:'A1',leg:'A1',like:'A1',listen:'A1',little:'A1',live:'A1',
+  long:'A1',look:'A1',love:'A1',lunch:'A1',make:'A1',man:'A1',many:'A1',me:'A1',meet:'A1',
+  milk:'A1',money:'A1',month:'A1',morning:'A1',mother:'A1',much:'A1',music:'A1',my:'A1',
+  name:'A1',need:'A1',new:'A1',next:'A1',nice:'A1',night:'A1',no:'A1',now:'A1',number:'A1',
+  of:'A1',on:'A1',one:'A1',open:'A1',or:'A1',our:'A1',out:'A1',play:'A1',please:'A1',
+  red:'A1',right:'A1',run:'A1',say:'A1',see:'A1',she:'A1',sit:'A1',small:'A1',so:'A1',
+  some:'A1',speak:'A1',sport:'A1',stop:'A1',street:'A1',swim:'A1',table:'A1',take:'A1',
+  talk:'A1',teacher:'A1',that:'A1',the:'A1',their:'A1',them:'A1',there:'A1',they:'A1',
+  this:'A1',time:'A1',to:'A1',today:'A1',together:'A1',too:'A1',town:'A1',train:'A1',
+  tree:'A1',two:'A1',up:'A1',us:'A1',very:'A1',walk:'A1',want:'A1',water:'A1',we:'A1',
+  week:'A1',what:'A1',when:'A1',where:'A1',which:'A1',white:'A1',who:'A1',with:'A1',
+  woman:'A1',word:'A1',write:'A1',year:'A1',yes:'A1',you:'A1',young:'A1',your:'A1',
+  // 動物
+  tiger:'A2',  lion:'A2',   bear:'A2',   wolf:'A2',   deer:'A2',   duck:'A1',
+  frog:'A2',   snake:'A2',  horse:'A1',  sheep:'A1',  goat:'A2',   pig:'A1',
+  cow:'A1',    hen:'A1',    fox:'A2',    owl:'A2',    bat:'A2',    bee:'A1',
+  ant:'A1',    fly:'A1',    bug:'A1',    elephant:'A2',monkey:'A2',rabbit:'A1',
+  mouse:'A1',  rat:'A2',    whale:'A2',  shark:'A2',  eagle:'A2',  parrot:'A2',
+  turtle:'A2', lizard:'B1', leopard:'B1',dolphin:'B1',penguin:'B1',gorilla:'B1',
+  crocodile:'B1',giraffe:'B1',flamingo:'B1',cheetah:'B1',
+  thunder:'B1', ocean:'A2',  journey:'A2', mirror:'A2', forest:'A1', garden:'A1',
+  winter:'A1',  summer:'A1', spring:'A1',  autumn:'A2', morning:'A1',evening:'A1',
+  window:'A1',  button:'A1', finger:'A1',  garden:'A1', market:'A2', castle:'B1',
+  bridge:'A2',  island:'A2', valley:'B1',  desert:'B1', jungle:'B1', planet:'A2',
+  rocket:'B1',  robot:'B1',  energy:'B1',  matter:'B1', signal:'B1', engine:'B1',
+  bottle:'A1',  candle:'A2', carpet:'A2',  curtain:'B1',kitchen:'A1',bedroom:'A1',
+  village:'A2', city:'A1',   capital:'B1', airport:'A2',station:'A2',factory:'B1',
+  soldier:'B1', captain:'B1',monster:'B1', dragon:'B1', wizard:'B1', knight:'B1',
+  silver:'A2',  golden:'A2', purple:'A1',  orange:'A1', yellow:'A1', copper:'B1',
+  danger:'B1',  rescue:'B1', battle:'B1',  attack:'B1', defend:'B1', escape:'B1',
+  mystery:'B1', secret:'A2', treasure:'B1',adventure:'B1',fortune:'B1',legend:'B1',
+  ancient:'B1', modern:'B1', future:'A2',  century:'B1',history:'A2',culture:'B1',
+  weather:'A2', climate:'B1',thunder:'B1', lightning:'B1',rainbow:'A2',
+  mountain:'A1',river:'A1',  flower:'A1',  stone:'A1',  cloud:'A1',  sunset:'A2',
+  sunrise:'A2', shadow:'B1', silence:'B1', freedom:'B1',comfort:'B1',pleasure:'B1',
+  success:'B1', failure:'B1',courage:'B1', wisdom:'B1', beauty:'A2', power:'A2',
+  music:'A1',   dance:'A2',  movie:'A1',   story:'A1',  dream:'A2',  memory:'B1',
+  friend:'A1',  family:'A1', parent:'A2',  teacher:'A1',student:'A2',doctor:'A1',
+  morning:'A1', midnight:'B1',weekend:'A2',holiday:'A2',birthday:'A1',festival:'B1',
+  happy:'A1',   angry:'A2',  scared:'A2',  lonely:'B1', jealous:'B1',nervous:'B1',
+  excited:'A2', bored:'A2',  worried:'A2', grateful:'B1',proud:'A2', ashamed:'B1',
+  // 動詞常見字
+  travel:'A2',  arrive:'A2', return:'A2',  change:'A2', create:'B1', decide:'B1',
+  explain:'B1', improve:'B1',increase:'B1',reduce:'B1', become:'A2', believe:'A2',
+  choose:'A2',  follow:'A2', include:'B1', produce:'B1',receive:'A2',remember:'A2',
+  understand:'A2',suggest:'B1',develop:'B1',discuss:'B1',provide:'B1',require:'B1',
+  snake:'A2',horse:'A1',sheep:'A1',goat:'A2',pig:'A1',cow:'A1',hen:'A1',
+  fox:'A2',owl:'A2',bat:'A2',bee:'A1',ant:'A1',fly:'A1',bug:'A1',
+  elephant:'A2',monkey:'A2',rabbit:'A1',mouse:'A1',rat:'A2',whale:'A2',
+  shark:'A2',eagle:'A2',parrot:'A2',turtle:'A2',lizard:'B1',leopard:'B1',
+  dolphin:'B1',penguin:'B1',gorilla:'B1',crocodile:'B1',
+  // 常被誤判的常用字
+  jump:'A1',help:'A1',hope:'A2',play:'A1',find:'A1',make:'A1',take:'A1',
+  give:'A1',show:'A1',tell:'A1',feel:'A2',fall:'A2',rain:'A1',snow:'A1',
+  warm:'A1',cool:'A1',dark:'A2',bright:'A2',clean:'A2',sweet:'A2',soft:'A2',
+  hard:'A2',full:'A1',empty:'A2',quick:'A2',loud:'A2',quiet:'A2',
+  happy:'A1',sad:'A1',angry:'A2',tired:'A2',scared:'A2',brave:'A2',
+  funny:'A2',pretty:'A2',ugly:'A2',smart:'A2',silly:'A2',lucky:'A2',
+  sick:'A2',hurt:'A2',lost:'A2',dead:'A2',alive:'A2',ready:'A2',
+  // 常見動作
+  swim:'A2',climb:'A2',dance:'A2',sing:'A2',draw:'A2',paint:'B1',
+  build:'A2',break:'A2',catch:'A2',throw:'A2',kick:'A2',hit:'A2',
+  push:'A2',pull:'A2',lift:'B1',carry:'A2',hold:'A2',drop:'A2',accident:'A2',activity:'A2',address:'A2',afraid:'A2',airport:'A2',angry:'A2',
+  animal:'A2',apartment:'A2',area:'A2',art:'A2',August:'A2',autumn:'A2',beautiful:'A2',
+  become:'A2',begin:'A2',believe:'A2',between:'A2',bicycle:'A2',board:'A2',body:'A2',
+  bored:'A2',boring:'A2',bring:'A2',build:'A2',busy:'A2',care:'A2',carry:'A2',celebrate:'A2',
+  center:'A2',centre:'A2',chance:'A2',change:'A2',check:'A2',clean:'A2',climb:'A2',club:'A2',
+  collect:'A2',colour:'A2',comfortable:'A2',complete:'A2',correct:'A2',create:'A2',cry:'A2',
+  culture:'A2',dangerous:'A2',dark:'A2',decide:'A2',describe:'A2',design:'A2',different:'A2',
+  dinner:'A2',direction:'A2',doctor:'A2',dream:'A2',during:'A2',early:'A2',easy:'A2',
+  email:'A2',enjoy:'A2',environment:'A2',even:'A2',evening:'A2',exam:'A2',example:'A2',
+  excellent:'A2',exciting:'A2',exercise:'A2',expensive:'A2',experience:'A2',explain:'A2',
+  fall:'A2',famous:'A2',far:'A2',feel:'A2',film:'A2',follow:'A2',forget:'A2',form:'A2',
+  future:'A2',garden:'A2',gift:'A2',government:'A2',group:'A2',grow:'A2',guess:'A2',
+  guide:'A2',half:'A2',happen:'A2',hard:'A2',hear:'A2',heart:'A2',heavy:'A2',history:'A2',
+  hobby:'A2',holiday:'A2',hope:'A2',hospital:'A2',hotel:'A2',idea:'A2',important:'A2',
+  information:'A2',internet:'A2',introduce:'A2',invite:'A2',job:'A2',join:'A2',journey:'A2',
+  kind:'A2',kitchen:'A2',lake:'A2',language:'A2',laugh:'A2',letter:'A2',lie:'A2',life:'A2',
+  lost:'A2',loud:'A2',map:'A2',market:'A2',meal:'A2',mean:'A2',member:'A2',mind:'A2',
+  miss:'A2',mountain:'A2',mouth:'A2',move:'A2',museum:'A2',natural:'A2',near:'A2',
+  neighbour:'A2',news:'A2',newspaper:'A2',once:'A2',only:'A2',page:'A2',parent:'A2',
+  park:'A2',party:'A2',pass:'A2',past:'A2',pay:'A2',people:'A2',picture:'A2',place:'A2',
+  plan:'A2',poor:'A2',popular:'A2',possible:'A2',present:'A2',pretty:'A2',price:'A2',
+  problem:'A2',produce:'A2',programme:'A2',put:'A2',question:'A2',quiet:'A2',ready:'A2',
+  receive:'A2',relax:'A2',remember:'A2',restaurant:'A2',return:'A2',rich:'A2',road:'A2',
+  room:'A2',round:'A2',safe:'A2',same:'A2',school:'A2',send:'A2',sentence:'A2',shop:'A2',
+  short:'A2',show:'A2',sick:'A2',side:'A2',since:'A2',sing:'A2',sister:'A2',sleep:'A2',
+  slow:'A2',smile:'A2',snow:'A2',soon:'A2',sorry:'A2',sound:'A2',start:'A2',station:'A2',
+  stay:'A2',still:'A2',strong:'A2',student:'A2',study:'A2',sure:'A2',surprise:'A2',
+  teach:'A2',team:'A2',television:'A2',tell:'A2',think:'A2',tired:'A2',turn:'A2',understand:'A2',
+  useful:'A2',usually:'A2',visit:'A2',wait:'A2',weather:'A2',well:'A2',while:'A2',wide:'A2',
+  win:'A2',wonderful:'A2',work:'A2',world:'A2',worry:'A2',worse:'A2',wrong:'A2',
+  // B1
+  achieve:'B1',affect:'B1',afford:'B1',agree:'B1',allow:'B1',although:'B1',announce:'B1',
+  appear:'B1',apply:'B1',argue:'B1',arrange:'B1',attempt:'B1',attend:'B1',attitude:'B1',
+  audience:'B1',avoid:'B1',award:'B1',aware:'B1',base:'B1',basic:'B1',border:'B1',
+  brain:'B1',brave:'B1',break:'B1',campaign:'B1',career:'B1',cause:'B1',challenge:'B1',
+  character:'B1',choice:'B1',citizen:'B1',claim:'B1',clearly:'B1',college:'B1',
+  communicate:'B1',community:'B1',company:'B1',compare:'B1',compete:'B1',complain:'B1',
+  complex:'B1',concern:'B1',condition:'B1',confidence:'B1',connect:'B1',consider:'B1',
+  contain:'B1',continue:'B1',contribute:'B1',control:'B1',convenient:'B1',conversation:'B1',
+  convince:'B1',cost:'B1',creative:'B1',crime:'B1',criticise:'B1',current:'B1',customer:'B1',
+  damage:'B1',deal:'B1',debate:'B1',deep:'B1',definitely:'B1',depend:'B1',develop:'B1',
+  difference:'B1',difficult:'B1',disappear:'B1',discuss:'B1',distance:'B1',doubt:'B1',
+  economic:'B1',education:'B1',effect:'B1',effort:'B1',election:'B1',encourage:'B1',
+  energy:'B1',event:'B1',expect:'B1',fair:'B1',figure:'B1',finally:'B1',forest:'B1',
+  friendship:'B1',general:'B1',global:'B1',health:'B1',healthy:'B1',improve:'B1',include:'B1',
+  increase:'B1',independent:'B1',industry:'B1',influence:'B1',instead:'B1',interest:'B1',
+  issue:'B1',knowledge:'B1',leader:'B1',legal:'B1',level:'B1',lifestyle:'B1',limit:'B1',
+  local:'B1',main:'B1',manage:'B1',matter:'B1',media:'B1',meeting:'B1',method:'B1',
+  modern:'B1',moment:'B1',national:'B1',nature:'B1',normal:'B1',notice:'B1',offer:'B1',
+  opinion:'B1',order:'B1',organization:'B1',outcome:'B1',perform:'B1',personal:'B1',
+  physical:'B1',plan:'B1',political:'B1',pollution:'B1',position:'B1',positive:'B1',
+  practice:'B1',prefer:'B1',prepare:'B1',pressure:'B1',prevent:'B1',private:'B1',
+  process:'B1',protect:'B1',prove:'B1',provide:'B1',public:'B1',purpose:'B1',raise:'B1',
+  reach:'B1',realise:'B1',reason:'B1',reduce:'B1',reflect:'B1',regard:'B1',relationship:'B1',
+  report:'B1',require:'B1',research:'B1',respond:'B1',result:'B1',role:'B1',rule:'B1',
+  science:'B1',serious:'B1',share:'B1',simple:'B1',situation:'B1',skill:'B1',social:'B1',
+  society:'B1',solution:'B1',source:'B1',spend:'B1',standard:'B1',stress:'B1',structure:'B1',
+  subject:'B1',success:'B1',suggest:'B1',support:'B1',technology:'B1',therefore:'B1',
+  throughout:'B1',topic:'B1',traditional:'B1',transport:'B1',trust:'B1',unless:'B1',
+  value:'B1',variety:'B1',various:'B1',view:'B1',vote:'B1',waste:'B1',whereas:'B1',
+  whether:'B1',whole:'B1',
+  // B2
+  abandon:'B2',abstract:'B2',academic:'B2',access:'B2',accurate:'B2',acknowledge:'B2',
+  acquire:'B2',adapt:'B2',adequate:'B2',administration:'B2',adopt:'B2',advance:'B2',
+  advantage:'B2',analyse:'B2',analysis:'B2',approach:'B2',appropriate:'B2',aspect:'B2',
+  assess:'B2',assumption:'B2',authority:'B2',benefit:'B2',capable:'B2',category:'B2',
+  circumstance:'B2',commit:'B2',commitment:'B2',concept:'B2',conclude:'B2',conflict:'B2',
+  consequence:'B2',consist:'B2',constitute:'B2',construct:'B2',context:'B2',contract:'B2',
+  contrast:'B2',controversial:'B2',convince:'B2',cope:'B2',corporate:'B2',criteria:'B2',
+  crucial:'B2',decline:'B2',define:'B2',demonstrate:'B2',devote:'B2',digital:'B2',
+  dimension:'B2',discipline:'B2',distinct:'B2',distribute:'B2',diversity:'B2',dominate:'B2',
+  eliminate:'B2',emphasise:'B2',encounter:'B2',ensure:'B2',establish:'B2',evaluate:'B2',
+  evidence:'B2',evolve:'B2',examine:'B2',expand:'B2',exploit:'B2',expose:'B2',express:'B2',
+  extensive:'B2',factor:'B2',feature:'B2',finance:'B2',flexible:'B2',focus:'B2',foster:'B2',
+  framework:'B2',function:'B2',fundamental:'B2',generate:'B2',gradually:'B2',grant:'B2',
+  guarantee:'B2',hypothesis:'B2',identify:'B2',illustrate:'B2',impact:'B2',implement:'B2',
+  imply:'B2',indicate:'B2',inevitable:'B2',innovation:'B2',integrate:'B2',interpret:'B2',
+  investigate:'B2',involve:'B2',justify:'B2',maintain:'B2',majority:'B2',mechanism:'B2',
+  modify:'B2',monitor:'B2',motivation:'B2',objective:'B2',obtain:'B2',occur:'B2',
+  perspective:'B2',phenomenon:'B2',policy:'B2',potential:'B2',predict:'B2',principle:'B2',
+  promote:'B2',proportion:'B2',range:'B2',rely:'B2',reveal:'B2',significant:'B2',
+  strategy:'B2',substantial:'B2',sufficient:'B2',sustainable:'B2',technical:'B2',
+  theory:'B2',transfer:'B2',transform:'B2',trend:'B2',ultimately:'B2',unique:'B2',
+  utilize:'B2',valid:'B2',variable:'B2',whereas:'B2',widespread:'B2',
+  // C1
+  ambiguous:'C1',analogy:'C1',articulate:'C1',assertion:'C1',attribute:'C1',coherent:'C1',
+  compelling:'C1',complement:'C1',comprehensive:'C1',conceive:'C1',concurrent:'C1',
+  constitute:'C1',contemplate:'C1',contradict:'C1',controversy:'C1',cultivate:'C1',
+  deduce:'C1',deliberate:'C1',denote:'C1',derive:'C1',differentiate:'C1',dilemma:'C1',
+  discrepancy:'C1',distinguish:'C1',elaborate:'C1',empirical:'C1',endorse:'C1',
+  envisage:'C1',explicit:'C1',facilitate:'C1',formulate:'C1',forthcoming:'C1',implicit:'C1',
+  inadequate:'C1',inherent:'C1',innovative:'C1',integrity:'C1',intrinsic:'C1',invoke:'C1',
+  magnitude:'C1',manifest:'C1',methodology:'C1',misconception:'C1',notion:'C1',
+  obligation:'C1',obscure:'C1',paradigm:'C1',perceive:'C1',persistent:'C1',predominant:'C1',
+  preliminary:'C1',premise:'C1',profound:'C1',prohibit:'C1',prominent:'C1',protocol:'C1',
+  refine:'C1',reinforce:'C1',relevant:'C1',reluctant:'C1',remedy:'C1',resilience:'C1',
+  rhetoric:'C1',rigorous:'C1',scrutiny:'C1',sequential:'C1',simulate:'C1',simultaneously:'C1',
+  sophisticated:'C1',subjective:'C1',supplement:'C1',suppress:'C1',sustain:'C1',
+  synthesis:'C1',threshold:'C1',undergo:'C1',undermine:'C1',unprecedented:'C1',
+  // C2
+  aberration:'C2',abstruse:'C2',acrimony:'C2',adumbrate:'C2',ameliorate:'C2',
+  anachronism:'C2',anomalous:'C2',antithesis:'C2',appease:'C2',archaic:'C2',arduous:'C2',
+  assiduous:'C2',bellicose:'C2',benevolent:'C2',byzantine:'C2',cacophony:'C2',
+  capitulate:'C2',capricious:'C2',catalyst:'C2',catharsis:'C2',circumspect:'C2',
+  cognizant:'C2',complacent:'C2',conciliatory:'C2',convoluted:'C2',dearth:'C2',
+  debilitate:'C2',deleterious:'C2',demagogue:'C2',disingenuous:'C2',dissonance:'C2',
+  ebullient:'C2',efficacious:'C2',ephemeral:'C2',equivocate:'C2',erudite:'C2',
+  esoteric:'C2',exacerbate:'C2',expedient:'C2',extraneous:'C2',fallacious:'C2',
+  fastidious:'C2',flippant:'C2',fortuitous:'C2',garrulous:'C2',gregarious:'C2',
+  hegemony:'C2',iconoclast:'C2',idiosyncratic:'C2',impetuous:'C2',incorrigible:'C2',
+  indignant:'C2',ineffable:'C2',insinuate:'C2',intransigent:'C2',labyrinth:'C2',
+  laconic:'C2',languid:'C2',lethargic:'C2',lucid:'C2',magnanimous:'C2',malevolent:'C2',
+  malleable:'C2',melancholy:'C2',mendacious:'C2',mercurial:'C2',metamorphosis:'C2',
+  meticulous:'C2',mitigate:'C2',mundane:'C2',nefarious:'C2',obfuscate:'C2',
+  obstreperous:'C2',ominous:'C2',omniscient:'C2',ostentatious:'C2',palimpsest:'C2',
+  paradox:'C2',parsimonious:'C2',pedantic:'C2',pernicious:'C2',perfidious:'C2',
+  perspicacious:'C2',petrichor:'C2',pragmatic:'C2',precocious:'C2',pretentious:'C2',
+  procrastinate:'C2',propitious:'C2',querulous:'C2',quintessential:'C2',recalcitrant:'C2',
+  recondite:'C2',reticent:'C2',sanguine:'C2',sardonic:'C2',serendipity:'C2',
+  soliloquy:'C2',sonder:'C2',spurious:'C2',surreptitious:'C2',sycophant:'C2',
+  taciturn:'C2',tangential:'C2',tenacious:'C2',trepidation:'C2',ubiquitous:'C2',
+  umbrage:'C2',vacillate:'C2',verbose:'C2',vicarious:'C2',volatile:'C2',wanderlust:'C2',
+  wistful:'C2',zealous:'C2',zenith:'C2',
+};
+
+async function getCEFR(word){
+  const w = word.toLowerCase();
+
+  // 1. 本地對照表（最快、最準確）
+  if(CEFR_DB[w]) return CEFR_DB[w];
+
+  // 2. 牛津學習者字典（Oxford Learner's Dictionaries）HTML 爬蟲
+  try{
+    const r = await sfetch(
+      `https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(w)}`,
+      6000
+    );
+    if(r){
+      const html = await r.text();
+      // Oxford 格式：<div class="symbols">/span class="cefr"> B2 </span>
+      const m = html.match(/class="[^"]*cefr[^"]*"[^>]*>\s*([ABC][12])\s*</i)
+             || html.match(/CEFR[^:]*:\s*([ABC][12])/i)
+             || html.match(/>\s*([ABC][12])\s*<\/span>/i);
+      if(m){
+        const level = m[1].toUpperCase();
+        if(CEFR_LIST.includes(level)){
+          CEFR_DB[w] = level; // 快取進本地表
+          return level;
+        }
+      }
+    }
+  }catch(e){}
+
+  // 3. Cambridge Learner's Dictionary HTML 爬蟲（備援）
+  try{
+    const r = await sfetch(
+      `https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(w)}`,
+      6000
+    );
+    if(r){
+      const html = await r.text();
+      const m = html.match(/class="epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
+             || html.match(/>\s*([ABC][12])\s*<\/span>/i)
+             || html.match(/data-level="([ABC][12])"/i);
+      if(m){
+        const level = m[1].toUpperCase();
+        if(CEFR_LIST.includes(level)){
+          CEFR_DB[w] = level;
+          return level;
+        }
+      }
+    }
+  }catch(e){}
+
+  return null;
+}
+
+// ── 內建常見字翻譯對照（保底，MyMemory 失敗時用）──
+const ZH_DICT = {
+  metamorphosis:'變態／變形',cat:'貓',dog:'狗',fish:'魚',bird:'鳥',tree:'樹',house:'房子',
+  water:'水',fire:'火',earth:'土',wind:'風',light:'光',dark:'黑暗',sky:'天空',sea:'海',
+  mountain:'山',river:'河',forest:'森林',flower:'花',stone:'石頭',sun:'太陽',moon:'月亮',
+  star:'星星',cloud:'雲',rain:'雨',snow:'雪',time:'時間',life:'生命',death:'死亡',
+  love:'愛',hate:'恨',hope:'希望',fear:'恐懼',dream:'夢',truth:'真相',power:'力量',
+  mind:'心智',soul:'靈魂',heart:'心',eye:'眼睛',hand:'手',voice:'聲音',word:'單字',
+  book:'書',school:'學校',city:'城市',country:'國家',world:'世界',science:'科學',
+  music:'音樂',art:'藝術',history:'歷史',nature:'自然',animal:'動物',plant:'植物',
+  color:'顏色',number:'數字',letter:'字母',question:'問題',answer:'答案',
+  change:'改變',move:'移動',grow:'成長',fall:'墜落',rise:'上升',stand:'站立',
+  walk:'走路',run:'跑步',fly:'飛翔',swim:'游泳',eat:'吃',drink:'喝',sleep:'睡眠',
+  think:'思考',speak:'說話',listen:'聆聽',watch:'觀看',feel:'感受',know:'知道',
+  beautiful:'美麗的',strong:'強壯的',fast:'快速的',slow:'緩慢的',big:'大的',small:'小的',
+  old:'老的',new:'新的',good:'好的',bad:'壞的',hot:'熱的',cold:'冷的',
+  serendipity:'意外驚喜',ephemeral:'短暫的',labyrinth:'迷宮',zenith:'頂點',
+  catalyst:'催化劑',enigma:'謎',quantum:'量子',soliloquy:'獨白',melancholy:'憂鬱',
+  wanderlust:'旅行癮',gossamer:'蜘蛛絲',lacuna:'空缺',petrichor:'雨後泥土香',
+  eloquent:'口才好的',ambiguous:'模稜兩可的',profound:'深刻的',resilient:'有韌性的',
+  benevolent:'慈善的',malevolent:'惡意的',omniscient:'全知的',ephemeral:'短暫的',
+  phenomenon:'現象',democracy:'民主',philosophy:'哲學',technology:'科技',
+  evolution:'演化',revolution:'革命',civilization:'文明',imagination:'想像力',
+  psychology:'心理學',anthropology:'人類學',archaeology:'考古學',
+  architecture:'建築',atmosphere:'氣氛／大氣',catastrophe:'災難',
+  chromosome:'染色體',photosynthesis:'光合作用',electromagnetic:'電磁的',
+  metabolism:'新陳代謝',hibernation:'冬眠',camouflage:'偽裝',
+  predator:'掠食者',ecosystem:'生態系',telescope:'望遠鏡',microscope:'顯微鏡',
+};
+
+// 清理翻譯結果 — 去除雜訊，回傳乾淨中文
+function cleanTr(t, orig){
+  if(!t) return '';
+  t = t.trim();
+  // 拒絕：只回傳原字、MYMEMORY錯誤、純英文、過長
+  if(t.toUpperCase().includes('MYMEMORY')) return '';
+  if(t.toLowerCase() === orig.toLowerCase()) return '';
+  if(/^[a-zA-Z\s]+$/.test(t)) return ''; // 全英文沒翻到
+  return t.split(/[,，;；(（\n]/)[0].trim().slice(0, 18);
+}
+
+async function getTranslation(text){
+  const orig = text.toLowerCase().trim();
+
+  // 1. 內建詞庫（最快最可靠）
+  if(ZH_DICT[orig]) return ZH_DICT[orig];
+
+  // 2. MyMemory
+  try{
+    const r = await sfetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0,200))}&langpair=en|zh-TW`, 6000);
+    if(r){
+      const d = await r.json();
+      const t = cleanTr(d?.responseData?.translatedText, orig);
+      if(t) return t;
+      // 也試試 matches[0]
+      const m0 = d?.matches?.[0]?.translation;
+      if(m0){ const t2=cleanTr(m0,orig); if(t2) return t2; }
+    }
+  }catch(e){}
+
+  // 3. Google Translate 非官方端點（通常可用）
+  try{
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(text.slice(0,200))}`;
+    const r = await sfetch(url, 6000);
+    if(r){
+      const d = await r.json();
+      const t = cleanTr(d?.[0]?.[0]?.[0], orig);
+      if(t) return t;
+    }
+  }catch(e){}
+
+  // 4. Wikipedia 中文標題（對專有名詞很好）
+  try{
+    const r = await sfetch(`https://zh.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(orig)}&redirects=1&format=json&origin=*`, 4000);
+    if(r){
+      const d = await r.json();
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.title && pages[id].title.toLowerCase()!==orig){
+        return pages[id].title.slice(0,16);
+      }
+    }
+  }catch(e){}
+
+  return ''; // 真的查不到
+}
+
+async function getWiki(word){
+  // Try Chinese Wikipedia first
+  try{
+    const r = await sfetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`, 5000);
+    if(r){
+      const d = await r.json();
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 20){
+        return { title: pages[id].title, extract: pages[id].extract, lang:'zh' };
+      }
+    }
+  }catch(e){}
+
+  // Fallback: English Wikipedia
+  try{
+    const r = await sfetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=4&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`, 5000);
+    if(r){
+      const d = await r.json();
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 20){
+        return { title: pages[id].title, extract: pages[id].extract, lang:'en' };
+      }
+    }
+  }catch(e){}
+
+  return null;
+}
+
+// Master word-data fetch — ALL APIs run in parallel
+async function fetchWordData(word){
+  const w = word.toLowerCase();
+  const res = { word:w, phonetic:'', cefr:null, meanings:[], translation:'', explanation:'', isRare:false };
+
+  // Run dict, CEFR, word-translation all at once
+  const [dictResult, cefrResult, trResult] = await Promise.allSettled([
+    getDictData(w),
+    getCEFR(w),
+    getTranslation(w),
+  ]);
+
+  // Apply dict
+  if(dictResult.status==='fulfilled' && dictResult.value){
+    res.phonetic  = dictResult.value.phonetic;
+    res.meanings  = dictResult.value.meanings;
+  }
+
+  // Apply CEFR
+  if(cefrResult.status==='fulfilled' && cefrResult.value){
+    res.cefr = cefrResult.value;
+  }
+
+  // Apply translation (only if it's genuinely Chinese)
+  if(trResult.status==='fulfilled' && trResult.value){
+    res.translation = trResult.value;
+  }
+
+  // Wikipedia: always try for explanation — critical for words not in Free Dictionary
+  // Run in parallel with the already-collected data
+  const wikiResult = await getWiki(w);
+
+  if(!res.meanings.length){
+    res.isRare = true;
+    if(wikiResult){
+      res.explanation = wikiResult.extract;
+      const wikiTitle = wikiResult.title;
+      if(wikiTitle && wikiTitle.toLowerCase() !== w && /[\u4e00-\u9fff]/.test(wikiTitle)){
+        if(!res.translation) res.translation = wikiTitle.slice(0,16);
+      }
+    }
+  } else {
+    // Even when we have dict data, add wiki as supplemental explanation
+    if(wikiResult && !res.explanation){
+      // Only use if it looks informative (not just a stub)
+      if(wikiResult.extract && wikiResult.extract.length > 50){
+        res.explanation = (wikiResult.lang==='zh' ? '' : '【Wikipedia】') + wikiResult.extract;
+      }
+    }
+  }
+
+  // Still no translation? Try translating the first English definition
+  if(!res.translation && res.meanings.length){
+    const firstDef = res.meanings[0]?.definitions[0]?.def || '';
+    if(firstDef) res.translation = await getTranslation(firstDef);
+  }
+
+  // Still nothing? Try translating the word itself one more time via Google
+  if(!res.translation){
+    try{
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(w)}`;
+      const r = await sfetch(url, 5000);
+      if(r){ const d=await r.json(); const t=cleanTr(d?.[0]?.[0]?.[0],w); if(t) res.translation=t; }
+    }catch(e){}
+  }
+
+  // Translate first definition to Chinese for the card modal detail view
+  if(res.meanings[0]?.definitions[0] && !res.meanings[0].definitions[0].zh){
+    const defTr = await getTranslation(res.meanings[0].definitions[0].def.slice(0,180));
+    if(defTr) res.meanings[0].definitions[0].zh = defTr;
+  }
+
+  // Also translate 2nd and 3rd meanings in background (non-blocking)
+  res.meanings.slice(1,3).forEach(async m => {
+    if(m.definitions[0] && !m.definitions[0].zh){
+      const t = await getTranslation(m.definitions[0].def.slice(0,160));
+      if(t) m.definitions[0].zh = t;
+    }
+  });
+
+  // Build explanation from meanings if still empty
+  if(!res.explanation && res.meanings.length){
+    res.explanation = res.meanings.map(m=>`【${m.partOfSpeech}】${m.definitions[0]?.def||''}`).join('\n');
+  }
+
+  // Last-resort fallback for translation — use POS label, never show bare English word
+  if(!res.translation){
+    const posMap = {noun:'名詞',verb:'動詞',adjective:'形容詞',adverb:'副詞',
+                    pronoun:'代名詞',conjunction:'連接詞',preposition:'介系詞',exclamation:'感嘆詞'};
+    const pos = res.meanings[0]?.partOfSpeech;
+    // Try to extract a key concept from the first definition
+    const firstDef = res.meanings[0]?.definitions[0]?.def || '';
+    const shortDef = firstDef.replace(/\(.*?\)/g,'').trim().split(/[,;.]/)[0].trim();
+    res.translation = pos ? `[${posMap[pos]||pos}]` : (shortDef.slice(0,20) || w);
+  }
+  if(!res.cefr) res.cefr = res.isRare ? 'C2' : estCEFR(w);
+
+  return res;
+}
+
+// ════════════════════════════════
+// BUILD CARD
+// ════════════════════════════════
+function buildCard(wd, mistakes, maxM, hintPenalty=0){
+  const stars  = c2s(wd.cefr);
+  const wlen   = wd.word.length;
+  const acc    = Math.max(0, 1 - mistakes/maxM);      // 0..1，錯越少越高
+  const defC   = wd.meanings.reduce((s,m)=>s+m.definitions.length,0) || 1;
+  const posC   = wd.meanings.length || 1;
+
+  // 短字加成（≤5字母 → 顯著加成，因為格子少很難猜）
+  const shortBonus = wlen <= 4 ? 0.80
+                   : wlen === 5 ? 0.50
+                   : wlen === 6 ? 0.20
+                   : 0;
+
+  const baseHP  = 80 + stars*28 + defC*14 + posC*10;
+  const baseATK = 45 + stars*22 + defC*9  + posC*6;
+  const accBonus = Math.round(acc * 70);
+  const shortMult = 1 + shortBonus;
+  // 提示扣減（0=沒用提示, 0.3=用了類型, 0.45=類型+字母, ...）
+  const hintMult = Math.max(0.1, 1 - hintPenalty);
+
+  const hp  = Math.round((baseHP  + accBonus) * shortMult * hintMult) + ~~(Math.random()*20);
+  const atk = Math.round((baseATK + accBonus) * shortMult * hintMult) + ~~(Math.random()*15);
+  const dispStars = shortBonus > 0 ? Math.max(stars, 2) : stars;
+
+  return {
+    id:`${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+    word:wd.word.toUpperCase(), wordLower:wd.word,
+    phonetic:wd.phonetic, cefr:wd.cefr, stars:dispStars,
+    translation:wd.translation, explanation:wd.explanation,
+    meanings:wd.meanings, isRare:wd.isRare,
+    shortWord: shortBonus > 0,   // 標記短字，卡牌庫可顯示特殊標籤
+    hp, atk,
+    isNew:true, createdAt:Date.now()
+  };
+}
+
+// ════════════════════════════════
+// CARD HTML
+// ════════════════════════════════
+function cardH(card, mini){
+  const s   = card.stars, cc = cCol(card.cefr);
+  const wl  = card.word.length;
+  const ws  = wl>9?'12px':wl>7?'14px':wl>5?'17px':'20px';
+  const starsH = Array.from({length:6}, (_,i)=>ICO.star(i<s,cc)).join('');
+  const hpH  = `${ICO.heart} ${card.hp}`;
+  const atkH = `${ICO.bolt} ${card.atk}`;
+
+  // 短字加成標記 (僅完整尺寸卡牌顯示，mini 不顯示避免太擠)
+  const shortBadge = (!mini && card.shortWord)
+    ? `<div style="position:absolute;top:0;left:0;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;font-size:7px;font-weight:900;padding:2px 5px;border-radius:0 0 6px 0;letter-spacing:.5px">SHORT+</div>`
+    : '';
+
+  return `<div class="ci s${s}" style="${mini?'border-radius:10px':''}position:relative;overflow:hidden">
+    ${shortBadge}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+      <div style="display:flex;gap:2px">${starsH}</div>
+      <div class="cchip tag" style="color:${cc};border-color:${cc}35;background:${cBg(card.cefr)}">${card.cefr}</div>
+    </div>
+    <div class="cword" style="font-size:${ws}">${card.word}</div>
+    <div class="ctr">${card.translation||card.wordLower}</div>
+    <div class="cstats">
+      <span class="shp" style="display:flex;align-items:center;gap:2px">${hpH}</span>
+      <span class="satk" style="display:flex;align-items:center;gap:2px">${atkH}</span>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════
+// GALLOWS SVG
+// ════════════════════════════════
+function galSVG(n){
+  const parts = [
+    `<circle cx="100" cy="42" r="12" stroke="#ff6ab0" stroke-width="3" fill="none"/>`,
+    `<line x1="100" y1="54" x2="100" y2="98" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="66" x2="78"  y2="84" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="66" x2="122" y2="84" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="98" x2="80"  y2="122" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="98" x2="120" y2="122" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+  ];
+  return `<svg viewBox="0 0 160 142" width="100%" style="display:block" xmlns="http://www.w3.org/2000/svg">
+    <line x1="20"  y1="133" x2="140" y2="133" stroke="#2a2a45" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50"  y1="133" x2="50"  y2="8"   stroke="#2a2a45" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50"  y1="8"   x2="100" y2="8"   stroke="#2a2a45" stroke-width="4" stroke-linecap="round"/>
+    <line x1="100" y1="8"   x2="100" y2="30"  stroke="#6b6b9a" stroke-width="3" stroke-linecap="round"/>
+    ${parts.slice(0,n).join('')}
+  </svg>`;
+}
+
+// ════════════════════════════════
+// HANGMAN RENDER
+// ════════════════════════════════
+function renderHM(){
+  const hm=S.hm;
+  document.getElementById('gallows').innerHTML = galSVG(hm.mistakes);
+
+  if(hm.status==='loading'||hm.status==='idle'){
+    document.getElementById('wdisp').innerHTML=`<div style="color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px;padding:20px 0">${ICO.spin} 尋找單字…</div>`;
+    document.getElementById('kb').innerHTML='';
+    document.getElementById('hm-status').textContent=''; return;
+  }
+  if(hm.status==='saving'){
+    document.getElementById('wdisp').innerHTML=`<div style="color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px;padding:16px 0"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6ab0" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> 查詢字典中…</div>`;
+    document.getElementById('kb').innerHTML='';
+    document.getElementById('hm-status').innerHTML=`<span style="color:var(--accent2)">● 獲取百科資訊，請稍候</span>`; return;
+  }
+
+  const left=hm.maxMistakes-hm.mistakes, pct=left/hm.maxMistakes;
+  const sc=pct>.5?'#00d68f':pct>.25?'#fbbf24':'#ff4d6d';
+  document.getElementById('hm-status').innerHTML=`<span style="color:${sc}">●</span> 剩餘機會：${left} / ${hm.maxMistakes}`;
+
+  document.getElementById('wdisp').innerHTML = hm.word.split('').map(c=>{
+    const sh=hm.guessed.has(c);
+    return `<div class="lslot ${sh?'rev':''}">${sh?c:''}</div>`;
+  }).join('');
+
+  document.getElementById('kb').innerHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c=>{
+    const hit  = hm.guessed.has(c) && hm.word.includes(c);
+    const miss = hm.guessed.has(c) && !hm.word.includes(c);
+    return `<button class="key ${hit?'hit':miss?'miss':''}" onclick="guess('${c}')" ${hm.guessed.has(c)?'disabled':''}>${c}</button>`;
+  }).join('');
+
+  // 提示按鈕
+  renderHintButtons();
+}
+
+// ════════════════════════════════
+// HANGMAN LOGIC
+// ════════════════════════════════
+async function startHM(){
+  S.hm = {
+    status:'loading', word:'', guessed:new Set(),
+    mistakes:0, maxMistakes:6, errors:0, details:null, newCard:null,
+    hint:null, hintPenalty:0, hintUsed:{ cat:false, letters:[] }
+  };
+  document.getElementById('roverlay').classList.remove('on');
+  renderHM();
+  const w = await getRandWord();
+  S.hm.word = w.toUpperCase();
+  S.hm.status = 'playing';
+  // 背景預先抓分類 hint（不阻塞遊戲）
+  fetchHintData(w).then(h=>{ S.hm.hint = h; renderHintButtons(); });
+  renderHM();
+}
+
+// ════════════════════════════════
+// HINT SYSTEM
+// ════════════════════════════════
+
+// 語義分類標籤
+const CATEGORY_TAGS = {
+  // 詞性類
+  animal:   '🐾 動物類',  plant:    '🌿 植物類',  food:     '🍎 食物類',
+  body:     '💪 身體部位', emotion:  '❤️ 情感類',  action:   '🏃 動作類',
+  place:    '📍 地點類',  object:   '📦 物品類',  nature:   '🌊 自然類',
+  science:  '🔬 科學類',  art:      '🎨 藝術類',  sport:    '⚽ 運動類',
+  person:   '👤 人物類',  time:     '⏰ 時間類',  abstract: '💭 抽象概念',
+  color:    '🎨 顏色類',  size:     '📏 尺寸類',  weather:  '⛅ 天氣類',
+  music:    '🎵 音樂類',  language: '📝 語言類',  number:   '🔢 數字類',
+};
+
+// 用 Datamuse 的語義關聯推斷分類
+async function fetchHintData(word){
+  const w = word.toLowerCase();
+  let category = null;
+
+  // 1. 先試牛津字典 API（有 CEFR 和 lexicalCategory）
+  try{
+    const r = await sfetch(
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`,
+      5000
+    );
+    if(r){
+      const data = await r.json();
+      const pos = data?.[0]?.meanings?.[0]?.partOfSpeech;
+      const defs = data?.[0]?.meanings?.flatMap(m=>m.definitions.map(d=>d.definition.toLowerCase())) || [];
+      const allText = defs.join(' ');
+
+      // 從定義文字推斷分類
+      if(/\b(animal|mammal|bird|fish|insect|reptile|species)\b/.test(allText)) category='animal';
+      else if(/\b(plant|tree|flower|leaf|root|herb|shrub|grass)\b/.test(allText)) category='plant';
+      else if(/\b(food|eat|edible|fruit|vegetable|meal|cook|flavor|taste)\b/.test(allText)) category='food';
+      else if(/\b(emotion|feeling|mood|happy|sad|angry|fear|love|joy)\b/.test(allText)) category='emotion';
+      else if(/\b(body|muscle|bone|organ|skin|blood|nerve|heart|brain)\b/.test(allText)) category='body';
+      else if(/\b(place|location|city|country|region|area|land|geography)\b/.test(allText)) category='place';
+      else if(/\b(sport|game|play|compete|athlete|team|race|match)\b/.test(allText)) category='sport';
+      else if(/\b(music|song|melody|rhythm|instrument|note|chord)\b/.test(allText)) category='music';
+      else if(/\b(science|physics|chemical|biology|experiment|theory)\b/.test(allText)) category='science';
+      else if(/\b(art|paint|draw|sculpture|design|creative|aesthetic)\b/.test(allText)) category='art';
+      else if(/\b(weather|climate|rain|sun|wind|storm|temperature)\b/.test(allText)) category='weather';
+      else if(/\b(move|walk|run|jump|throw|lift|push|pull|act)\b/.test(allText)) category='action';
+      else if(pos==='noun') category='object';
+      else if(pos==='adjective') category='abstract';
+      else if(pos==='verb') category='action';
+    }
+  }catch(e){}
+
+  // 2. 試 Datamuse 的 `rel_jja`（形容詞關聯）推斷具體vs抽象
+  if(!category){
+    try{
+      const r = await sfetch(`https://api.datamuse.com/words?rel_jjb=${encodeURIComponent(w)}&max=5`, 4000);
+      if(r){
+        const d = await r.json();
+        if(d.length) category = 'object'; // 有形容詞修飾 → 是具體名詞
+      }
+    }catch(e){}
+  }
+
+  return { category };
+}
+
+// 渲染提示按鈕（在 kb 下方）
+function renderHintButtons(){
+  const hm = S.hm;
+  if(hm.status !== 'playing') return;
+  const hintEl = document.getElementById('hint');
+  if(!hintEl) return;
+
+  const catLabel = hm.hint?.category ? CATEGORY_TAGS[hm.hint.category] : null;
+  const canUseCat = catLabel && !hm.hintUsed.cat;
+  const unrevealedIdx = hm.word.split('').reduce((arr,c,i)=>{
+    if(!hm.guessed.has(c) && !hm.hintUsed.letters.includes(i)) arr.push(i);
+    return arr;
+  }, []);
+  const canUseLetter = unrevealedIdx.length > 0;
+
+  // 顯示已用提示資訊
+  const usedInfo = [];
+  if(hm.hintUsed.cat && catLabel) usedInfo.push(`<span style="color:#f59e0b;font-size:11px">💡 ${catLabel}</span>`);
+  hm.hintUsed.letters.forEach(idx => usedInfo.push(`<span style="color:#60a5fa;font-size:11px">🔤 第${idx+1}個字母已提示</span>`));
+
+  const penalty = Math.round(hm.hintPenalty * 100);
+
+  hintEl.innerHTML = `
+  <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 0">
+    ${usedInfo.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${usedInfo.join('')}</div>` : ''}
+    ${penalty > 0 ? `<div style="font-size:10px;color:var(--danger)">提示扣減：-${penalty}% 卡牌強度</div>` : ''}
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      ${canUseCat ? `<button onclick="useHintCat()" style="background:#f59e0b18;border:1px solid #f59e0b40;color:#f59e0b;font-size:11px;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer">
+        💡 類型提示 <span style="opacity:.7;font-size:10px">(-30%)</span>
+      </button>` : (!hm.hintUsed.cat && !catLabel ? `<button disabled style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:5px 12px;border-radius:8px;opacity:.5">
+        💡 類型載入中…
+      </button>` : '')}
+      ${canUseLetter ? `<button onclick="useHintLetter()" style="background:#60a5fa18;border:1px solid #60a5fa40;color:#60a5fa;font-size:11px;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer">
+        🔤 字母提示 <span style="opacity:.7;font-size:10px">(-15%)</span>
+      </button>` : ''}
+    </div>
+  </div>`;
+}
+
+function useHintCat(){
+  const hm = S.hm;
+  if(hm.hintUsed.cat || !hm.hint?.category) return;
+  hm.hintUsed.cat = true;
+  hm.hintPenalty = Math.min(1, hm.hintPenalty + 0.30);
+  hm.errors = Math.max(hm.errors, 1); // 用提示至少算1次錯
+  toast(`類型提示：${CATEGORY_TAGS[hm.hint.category]} （已扣 30% 強度）`, 'info');
+  renderHintButtons();
+}
+
+function useHintLetter(){
+  const hm = S.hm;
+  // 找一個未猜到且未提示過的字母位置，優先選中間位置（不要給第一個）
+  const unrevIdx = hm.word.split('').reduce((arr,c,i)=>{
+    if(!hm.guessed.has(c) && !hm.hintUsed.letters.includes(i)) arr.push(i);
+    return arr;
+  }, []);
+  if(!unrevIdx.length) return;
+  // 優先中間位置，避免直接給最後一個
+  unrevIdx.sort((a,b)=>Math.abs(a-hm.word.length/2)-Math.abs(b-hm.word.length/2));
+  const idx = unrevIdx[0];
+  const letter = hm.word[idx];
+
+  hm.hintUsed.letters.push(idx);
+  hm.hintPenalty = Math.min(1, hm.hintPenalty + 0.15);
+  // 揭示這個字母（相當於猜中它）
+  hm.guessed.add(letter);
+  // 但不算猜中加分，只靜默加入（不觸發 won 判斷，讓玩家繼續猜）
+  toast(`字母提示：第 ${idx+1} 個字母是「${letter}」（已扣 15% 強度）`, 'info');
+
+  // 如果這樣揭示後已全猜完，正常觸發結束
+  if(hm.word.split('').every(c=>hm.guessed.has(c))){ endHM('won'); return; }
+  renderHM();
+  renderHintButtons();
+}
+
+function guess(l){
+  const hm=S.hm;
+  if(hm.status!=='playing' || hm.guessed.has(l)) return;
+  hm.guessed.add(l);
+  if(!hm.word.includes(l)){
+    hm.mistakes++; hm.errors++;
+    const g=document.getElementById('gallows');
+    g.style.animation='none';
+    requestAnimationFrame(()=>{ g.style.animation='shake .35s ease'; });
+    if(hm.mistakes>=hm.maxMistakes){ endHM('lost'); return; }
+  } else {
+    if(hm.word.split('').every(c=>hm.guessed.has(c))){ endHM('won'); return; }
+  }
+  renderHM();
+}
+
+async function endHM(result){
+  S.hm.status='saving'; renderHM();
+  const wd = await fetchWordData(S.hm.word.toLowerCase());
+  S.hm.details = wd;
+  if(result==='won'){
+    const card = buildCard(wd, S.hm.errors, S.hm.maxMistakes, S.hm.hintPenalty);
+    S.cards.unshift(card); S.hm.newCard = card;
+    if(!S.unlockedLib){ S.unlockedLib=true; unlockNav(); }
+    save(); updHdr();
+    if(S.tab!=='library'){
+      const b=document.getElementById('nbadge');
+      b.style.display='flex';
+      b.textContent=S.cards.filter(c=>c.isNew).length;
+    }
+  }
+  S.hm.status=result; renderHM(); renderResult(result);
+}
+
+function renderResult(result){
+  const hm=S.hm, ov=document.getElementById('roverlay');
+  ov.classList.add('on');
+  const rc=document.getElementById('rcontent');
+  const acc=Math.max(0,1-hm.errors/hm.maxMistakes), ap=Math.round(acc*100);
+  const wd=hm.details;
+
+  // meanings HTML — shows partOfSpeech, English def, Chinese translation, example
+  const mHTML = buildMeaningsHTML(wd?.meanings);
+
+  // explanation section — shown alongside OR as fallback
+  const hasExpl = wd?.explanation && wd.explanation.trim().length > 0;
+  // if rare (wiki text), show separately; if it's the 【pos】def fallback, don't double-show
+  const showExplSeparate = hasExpl && wd.isRare && !wd.explanation.startsWith('【');
+  const showExplAsFallback = hasExpl && !mHTML;
+
+  rc.innerHTML=`
+  <div style="text-align:center;margin-bottom:14px">
+    ${result==='won'
+      ? `<div style="font-size:40px;margin-bottom:4px">🎉</div>
+         <div class="ko" style="font-size:28px;color:var(--ok)">CLEAR!</div>
+         <div style="font-size:12px;color:var(--muted);margin-top:2px">猜對了！新卡牌已加入庫中</div>`
+      : `<div style="font-size:40px;margin-bottom:4px">💀</div>
+         <div class="ko" style="font-size:28px;color:var(--danger)">GAME OVER</div>
+         <div style="font-size:12px;color:var(--muted);margin-top:2px">答案是：<strong style="color:#fff">${hm.word}</strong></div>`
+    }
+  </div>
+
+  ${result==='won' && hm.newCard
+    ? `<div style="width:130px;margin:0 auto 14px" class="cdrop"><div class="cw">${cardH(hm.newCard)}</div></div>`
+    : ''}
+
+  <!-- Word info card -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div class="ko" style="font-size:22px;color:#fff;letter-spacing:2px">${(wd?.word||hm.word).toUpperCase()}</div>
+        ${wd?.phonetic ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${wd.phonetic}</div>` : ''}
+      </div>
+      ${wd?.cefr ? `<div class="tag" style="color:${cCol(wd.cefr)};border-color:${cCol(wd.cefr)}40;background:${cBg(wd.cefr)};font-size:11px;margin-top:2px">${wd.cefr}</div>` : ''}
+    </div>
+    ${wd?.translation
+      ? `<div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:10px">中文翻譯：${wd.translation}</div>`
+      : ''}
+    <div class="dvd"></div>
+    ${mHTML
+      ? `<div style="margin-top:10px">${mHTML}</div>`
+      : showExplAsFallback
+        ? `<div style="font-size:13px;color:var(--text);line-height:1.75;margin-top:8px">${wd.explanation}</div>`
+        : `<div id="dict-patch-zone" style="font-size:13px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:6px">${ICO.spin}查詢字典中…</div>`
+    }
+  </div>
+
+  ${showExplSeparate ? `
+  <div class="dsec" style="margin-bottom:12px">
+    <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.globe} Wikipedia</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.75">${wd.explanation}</div>
+  </div>` : ''}
+
+  ${result==='won' ? `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px">
+    <div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:7px">猜測正確率</div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:5px">
+      <span>錯誤：${hm.errors} 次</span>
+      <span style="color:${ap>66?'var(--ok)':ap>33?'#fbbf24':'var(--danger)'}">${ap}%</span>
+    </div>
+    <div style="background:var(--bg3);border-radius:999px;height:5px;overflow:hidden">
+      <div style="height:100%;width:${ap}%;background:${ap>66?'var(--ok)':ap>33?'#fbbf24':'var(--danger)'};border-radius:999px;transition:width .7s .1s"></div>
+    </div>
+    ${(()=>{
+      const wlen = (wd?.word||hm.word).length;
+      const shortBonus = wlen<=4?'+80%':wlen===5?'+50%':wlen===6?'+20%':null;
+      const n = S.cards.length;
+      const tier = n<5?0:n<15?1:n<30?2:3;
+      const tierLabel = ['新手','初級','中級','高級'][tier];
+      const tierColor = ['#94a3b8','#4ade80','#60a5fa','#facc15'][tier];
+      const nextTier  = [5,15,30,Infinity][tier];
+      const cardsToNext = nextTier===Infinity ? null : nextTier - n;
+      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        ${shortBonus ? `<div style="background:#f59e0b20;border:1px solid #f59e0b50;color:#f59e0b;font-size:10px;font-weight:900;padding:2px 7px;border-radius:4px">SHORT ${shortBonus} 加成</div>` : ''}
+        <div style="background:${tierColor}18;border:1px solid ${tierColor}40;color:${tierColor};font-size:10px;font-weight:900;padding:2px 7px;border-radius:4px">難度 ${tierLabel}</div>
+        ${cardsToNext ? `<div style="font-size:10px;color:var(--muted)">再收 ${cardsToNext} 張難度提升</div>` : `<div style="font-size:10px;color:#facc15">最高難度！</div>`}
+      </div>`;
+    })()}
+    <div style="font-size:10px;color:var(--muted);margin-top:5px">正確率越高 × 短字加成 × 字義越豐富 → 卡牌更強</div>
+  </div>` : ''}
+
+  <button class="btn btnp" style="width:100%;font-size:15px;margin-bottom:8px" onclick="startHM()">
+    ${ICO.refresh} 再猜一次
+  </button>
+  ${S.unlockedLib ? `<button class="btn btns" style="width:100%" onclick="goTab('library')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    卡牌庫（${S.cards.length} 張）
+  </button>` : ''}
+  `;
+
+  // If spinner was shown (no dict data yet), patch asynchronously
+  if(!mHTML && !showExplAsFallback){
+    patchResultDict(wd, result);
+  }
+}
+
+// Fill in the dict-patch-zone after the DOM renders, with extra wiki attempts
+async function patchResultDict(wd, result){
+  const w = wd?.word || S.hm.word.toLowerCase();
+
+  // Try Wikipedia (EN) as the main fallback for words like "wanderlust"
+  let patchText = '';
+
+  // 1. Try English Wiktionary via MediaWiki API
+  try{
+    const r = await sfetch(`https://en.wiktionary.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(w)}&format=json&origin=*`, 5000);
+    if(r){
+      const d = await r.json();
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 30){
+        patchText = pages[id].extract.slice(0, 400);
+      }
+    }
+  }catch(e){}
+
+  // 2. If still nothing, try English Wikipedia
+  if(!patchText){
+    try{
+      const r = await sfetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(w)}&redirects=1&format=json&origin=*`, 5000);
+      if(r){
+        const d = await r.json();
+        const pages = d?.query?.pages;
+        const id = pages ? Object.keys(pages)[0] : '-1';
+        if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 30){
+          patchText = pages[id].extract.slice(0, 400);
+        }
+      }
+    }catch(e){}
+  }
+
+  // Update wd.explanation and the card if we got something
+  if(patchText && wd){ wd.explanation = patchText; }
+
+  // Try one more translation pass if missing
+  let patchTr = wd?.translation || '';
+  if(!patchTr || /^[a-zA-Z]/.test(patchTr)){
+    patchTr = await getTranslation(w);
+    if(patchTr && wd) wd.translation = patchTr;
+  }
+
+  // Also update the saved card if won
+  if(result==='won' && S.hm.newCard){
+    if(patchText)  S.hm.newCard.explanation = patchText;
+    if(patchTr && !/^[a-zA-Z]/.test(patchTr)) S.hm.newCard.translation = patchTr;
+    save();
+  }
+
+  // Patch the DOM — update just the dict zone if still visible
+  const zone = document.getElementById('dict-patch-zone');
+  if(zone){
+    if(patchText){
+      zone.style.color = 'var(--text)';
+      zone.style.lineHeight = '1.75';
+      zone.style.fontSize = '13px';
+      zone.innerHTML = `<div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px">${ICO.globe} Wikipedia / Wiktionary</div>${patchText.replace(/\n/g,'<br>')}`;
+    } else {
+      zone.innerHTML = `<span style="color:var(--muted);font-size:12px">（此單字暫無線上字典資料）</span>`;
+    }
+  }
+
+  // Also patch translation display if it updated
+  const trEl = document.getElementById('result-tr-display');
+  if(trEl && patchTr && !/^[a-zA-Z]/.test(patchTr)){
+    trEl.textContent = `中文翻譯：${patchTr}`;
+  }
+}
+
+// ════════════════════════════════
+// LIBRARY
+// ════════════════════════════════
+function renderLib(){
+  S.cards.forEach(c=>c.isNew=false); save();
+  document.getElementById('nbadge').style.display='none';
+  const g=document.getElementById('libgrid');
+  if(!S.cards.length){
+    g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4" style="display:block;margin:0 auto 10px"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><line x1="17" y1="11" x2="23" y2="11"/></svg>
+      還沒有卡牌，先去猜單字吧！</div>`;
+    return;
+  }
+  g.innerHTML = S.cards.map(c=>`<div class="cw" onclick="oModal('${c.id}')">${cardH(c)}</div>`).join('');
+}
+
+// ════════════════════════════════
+// CARD MODAL
+// ════════════════════════════════
+
+// Build meanings HTML from a meanings array
+function buildMeaningsHTML(meanings){
+  if(!meanings || !meanings.length) return '';
+  return meanings.map(m=>`
+    <div style="margin-bottom:13px">
+      <span class="ptag">${m.partOfSpeech}</span>
+      ${m.definitions.map((d,di)=>`
+        <div style="margin-bottom:${di<m.definitions.length-1?'8px':'0'}">
+          <div class="ddef">• ${d.def}</div>
+          ${d.zh  ? `<div class="dzh" style="padding-left:10px;margin-top:2px">▶ 中文：${d.zh}</div>` : ''}
+          ${d.example ? `<div class="dex" style="margin-top:3px">"${d.example}"</div>` : ''}
         </div>
-
-        <!-- 視圖 2: 卡牌庫 (Library) -->
-        <div id="view-library" class="hidden animate-fade-in w-full">
-            <div class="flex justify-between items-end mb-6">
-                <h2 class="text-2xl font-bold flex items-center gap-2 text-slate-100"><i class="fas fa-book-open text-indigo-400"></i> 卡牌庫</h2>
-                <span class="text-xs text-slate-400">點擊卡牌查看百科解釋</span>
-            </div>
-            <div id="library-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 justify-items-center pb-8"></div>
-        </div>
-
-        <!-- 視圖 3: 競技場 (Arena) -->
-        <div id="view-arena" class="hidden animate-fade-in w-full">
-            <div id="arena-container" class="w-full"></div>
-        </div>
-
-    </main>
-
-    <!-- 底部導航 -->
-    <nav class="fixed bottom-0 w-full bg-[#1e293b] border-t border-slate-700/50 flex justify-around p-2 z-50 pb-safe">
-        <button id="tab-hangman" onclick="switchTab('hangman')" class="tab-btn active text-indigo-400 relative flex flex-col items-center justify-center w-full py-2 transition-colors">
-            <i class="fas fa-gamepad text-2xl mb-1"></i>
-            <span class="text-xs font-medium">猜單字</span>
-        </button>
-        <button id="tab-library" onclick="switchTab('library')" class="tab-btn text-slate-400 hover:text-slate-200 relative flex flex-col items-center justify-center w-full py-2 transition-colors">
-            <i class="fas fa-book-open text-2xl mb-1"></i>
-            <span class="text-xs font-medium">卡牌庫</span>
-            <span id="badge-library" class="hidden absolute top-1 right-1/4 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md animate-bounce">0</span>
-        </button>
-        <button id="tab-arena" onclick="switchTab('arena')" class="tab-btn text-slate-600 cursor-not-allowed relative flex flex-col items-center justify-center w-full py-2 transition-colors" disabled>
-            <i class="fas fa-lock text-2xl mb-1" id="arena-icon"></i>
-            <span class="text-xs font-medium" id="arena-label">競技場(需4張)</span>
-        </button>
-    </nav>
-
-    <!-- Firebase SDK (Modular) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- 全域狀態 ---
-        let app, auth, db, appId;
-        
-        const State = {
-            user: null,
-            isOfflineMode: false,
-            cards: [],
-            activeTab: 'hangman',
-            hangman: { status: 'loading', word: '', guessed: [], mistakes: 0, maxMistakes: 6, newCard: null, details: null },
-            arena: { view: 'deck_select', selectedDeck: [], rooms: [], matchId: null, matchData: null, unsubscribeMatchList: null }
-        };
-
-        const uiElements = {
-            loadingContainer: document.getElementById('global-loading'),
-            loadingText: document.getElementById('loading-text'),
-            loadingSubtext: document.getElementById('loading-subtext'),
-            loadingSpinner: document.getElementById('loading-spinner'),
-            forceBtn: document.getElementById('force-start-btn')
-        };
-
-        // --- 輔助：Toast 提示 ---
-        window.showToast = function(msg, isError = false) {
-            const toast = document.createElement('div');
-            toast.className = `px-6 py-3 rounded-full shadow-2xl border animate-slide-down flex items-center gap-2 text-sm font-bold w-full justify-center ${isError ? 'bg-rose-900/90 border-rose-600 text-rose-100' : 'bg-slate-800 border-slate-600 text-white'}`;
-            toast.innerHTML = `<i class="fas ${isError ? 'fa-exclamation-triangle text-rose-400' : 'fa-info-circle text-indigo-400'}"></i> ${msg}`;
-            document.getElementById('toast-container').appendChild(toast);
-            setTimeout(() => {
-                toast.classList.replace('animate-slide-down', 'opacity-0');
-                toast.style.transition = 'opacity 0.3s';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        // --- 防卡死機制 ---
-        let initTimeout = setTimeout(() => {
-            if (!State.user && !State.isOfflineMode) {
-                uiElements.loadingSpinner.className = "fas fa-wifi text-6xl text-yellow-500 animate-pulse";
-                uiElements.loadingText.innerText = "連線似乎受到阻擋";
-                uiElements.loadingText.className = "text-xl font-bold mt-4 text-yellow-400";
-                uiElements.loadingSubtext.innerText = "可能受擋廣告套件影響，或是缺少伺服器環境。您可以先進入單機模式遊玩！";
-                uiElements.loadingSubtext.classList.remove('hidden');
-                uiElements.forceBtn.classList.remove('hidden');
-            }
-        }, 8000);
-
-        uiElements.forceBtn.onclick = () => {
-            clearTimeout(initTimeout);
-            enableOfflineMode();
-        };
-
-        function enableOfflineMode() {
-            State.isOfflineMode = true;
-            uiElements.loadingContainer.classList.add('opacity-0');
-            setTimeout(() => uiElements.loadingContainer.classList.add('hidden'), 300);
-            
-            State.user = { uid: 'local_user' };
-            try {
-                const localCards = JSON.parse(localStorage.getItem('wordArenaCards') || '[]');
-                State.cards = localCards;
-            } catch(e) { State.cards = []; }
-            
-            showToast("已切換為單機模式。卡牌將儲存於您的瀏覽器中。");
-            updateUI();
-            initHangmanGame();
-        }
-
-        // --- 初始化 Firebase ---
-        async function initApp() {
-            try {
-                let configObj = {};
-                if (typeof __firebase_config !== 'undefined') {
-                    configObj = typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config;
-                }
-                
-                if (!configObj || Object.keys(configObj).length === 0) throw new Error("無效的 Firebase 設定檔");
-
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'hangman-card-battler';
-                app = initializeApp(configObj);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user && !State.isOfflineMode) {
-                        clearTimeout(initTimeout);
-                        State.user = user;
-                        uiElements.loadingContainer.classList.add('opacity-0');
-                        setTimeout(() => uiElements.loadingContainer.classList.add('hidden'), 300);
-                        
-                        const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
-                        onSnapshot(cardsRef, (snapshot) => {
-                            const loadedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            loadedCards.sort((a, b) => b.createdAt - a.createdAt);
-                            State.cards = loadedCards;
-                            updateUI();
-                            if (State.activeTab === 'library') renderLibrary();
-                            if (State.activeTab === 'arena' && State.arena.view === 'deck_select') renderArena();
-                        });
-
-                        initHangmanGame();
-                    }
-                });
-
-            } catch (err) {
-                clearTimeout(initTimeout);
-                uiElements.loadingSpinner.className = "fas fa-exclamation-triangle text-6xl text-red-500";
-                uiElements.loadingText.innerText = "無法連接伺服器";
-                uiElements.loadingSubtext.innerText = err.message;
-                uiElements.loadingSubtext.classList.remove('hidden');
-                uiElements.forceBtn.classList.remove('hidden');
-            }
-        }
-
-        // --- ★ 核心升級：AI 與百科查詢引擎 ★ ---
-        window.fetchWordDetails = async function(word) {
-            const apiKey = ""; // 執行環境會自動注入
-            
-            // 1. 優先使用 Gemini AI 結合 Google 搜尋
-            if (apiKey) {
-                try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-                    const payload = {
-                        contents: [{ parts: [{ text: `請查詢英文單字或詞彙 '${word}'。如果是專有名詞、品牌縮寫或冷門字，請結合 Google 搜尋與維基百科給出準確且生動的解釋。` }] }],
-                        systemInstruction: { parts: [{ text: "你是一個專業字典與百科全書API。請務必回傳純 JSON 格式。包含欄位：translation(簡短繁體中文翻譯，最長6個字), explanation(詳細的繁體中文解釋，包含字義、來源或百科背景介紹，約30-80字), isRare(是否為專有名詞或罕見字, true/false), cefr(單字難度 'A1'~'C2' 或 '???')" }] },
-                        tools: [{ google_search: {} }],
-                        generationConfig: { responseMimeType: "application/json", responseSchema: { type: "OBJECT", properties: { translation: { type: "STRING" }, explanation: { type: "STRING" }, isRare: { type: "BOOLEAN" }, cefr: { type: "STRING" } } } }
-                    };
-
-                    const fetchWithRetry = async (url, options, retries = 3) => {
-                        const delays = [1000, 2000, 4000];
-                        for (let i = 0; i < retries; i++) {
-                            try {
-                                const res = await fetch(url, options);
-                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                                return await res.json();
-                            } catch (err) {
-                                if (i === retries - 1) throw err;
-                                await new Promise(r => setTimeout(r, delays[i]));
-                            }
-                        }
-                    };
-
-                    const data = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        const result = JSON.parse(text);
-                        return {
-                            translation: result.translation || "未知",
-                            explanation: result.explanation || "暫無詳細解釋",
-                            isRare: !!result.isRare,
-                            cefr: result.cefr || "???"
-                        };
-                    }
-                } catch (e) {
-                    console.warn("Gemini API 查詢失敗，切換至備用百科字典方案:", e);
-                }
-            }
-
-            // 2. 備用方案：維基百科 + Dictionary API + MyMemory
-            let translation = "未知";
-            let explanation = "";
-            let isRare = false;
-            let cefr = "A1";
-
-            try {
-                // 先查維基百科 (針對專有名詞)
-                const wikiRes = await fetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=2&explaintext=1&titles=${word}&format=json&origin=*`);
-                const wikiData = await wikiRes.json();
-                const pages = wikiData.query?.pages;
-                const pageId = pages ? Object.keys(pages)[0] : "-1";
-                
-                if (pageId !== "-1" && pages[pageId].extract) {
-                    explanation = `【維基百科】${pages[pageId].extract}`;
-                    translation = pages[pageId].title;
-                    isRare = true;
-                    cefr = "???";
-                } else {
-                    // 查 MyMemory 翻譯
-                    const transRes = await fetch(`https://api.mymemory.translated.net/get?q=${word}&langpair=en|zh-TW`);
-                    const transData = await transRes.json();
-                    if (transData?.responseData?.translatedText) {
-                        translation = transData.responseData.translatedText;
-                        if (translation.toLowerCase() === word.toLowerCase() || translation.includes("MYMEMORY")) {
-                            translation = "查無翻譯";
-                            isRare = true;
-                        }
-                    }
-                    
-                    // 查 Dictionary API (英文原意)
-                    if (!isRare || translation === "查無翻譯") {
-                        try {
-                            const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-                            if(dictRes.ok) {
-                                const dictData = await dictRes.json();
-                                if (dictData?.[0]?.meanings?.[0]?.definitions?.[0]) {
-                                    const enDef = dictData[0].meanings[0].definitions[0].definition;
-                                    explanation = `中文翻譯為「${translation !== "查無翻譯" ? translation : '未知'}」。\n【英英字典】${enDef}`;
-                                }
-                            }
-                        } catch(e) {}
-                    }
-                }
-                
-                if(!explanation) explanation = `中文翻譯大約為「${translation}」。網路字典中無更詳細的百科資料。`;
-                
-            } catch (e) {
-                translation = "查無翻譯";
-                explanation = "網路或伺服器異常，無法連接字典與維基百科。";
-                isRare = true;
-                cefr = "???";
-            }
-            
-            // 計算預設難度
-            if(cefr === "A1" && !isRare) {
-                 const l = word.length;
-                 if (l <= 4) cefr = "A1"; else if (l === 5) cefr = "A2"; else if (l === 6) cefr = "B1"; else if (l === 7) cefr = "B2"; else if (l === 8) cefr = "C1"; else cefr = "C2";
-            }
-
-            return { translation, explanation, isRare, cefr };
-        };
-
-        // --- 產生卡牌 HTML ---
-        window.generateCardHTML = function(card, hideDetails = false) {
-            if (hideDetails) {
-                return `<div class="bg-[#1e293b] border border-slate-600 rounded-xl p-4 w-full h-full min-h-[200px] flex items-center justify-center shadow-lg relative overflow-hidden aspect-[3/4]">
-                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-900/30 to-slate-800"></div>
-                    <i class="fas fa-lock text-slate-500 relative z-10 text-3xl"></i>
-                </div>`;
-            }
-
-            const rarityColors = {
-                1: 'border-slate-500 from-slate-700 to-slate-800 text-slate-400',
-                2: 'border-emerald-600 from-emerald-900 to-[#0f172a] text-emerald-400',
-                3: 'border-blue-500 from-blue-900 to-[#0f172a] text-blue-400',
-                4: 'border-purple-500 from-purple-900 to-[#0f172a] text-purple-400',
-                5: 'border-yellow-500 from-yellow-900/80 to-[#1e293b] text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.2)]'
-            };
-            const theme = rarityColors[card.stars] || rarityColors[1];
-
-            let starsHTML = '';
-            for(let i=0; i<5; i++) starsHTML += `<i class="fas fa-star text-[12px] ${i < card.stars ? 'text-yellow-400 drop-shadow-md' : 'text-slate-600/50'}"></i>`;
-
-            return `
-            <div class="relative bg-gradient-to-br ${theme} border-2 rounded-xl p-4 w-full aspect-[3/4] flex flex-col items-center shadow-xl overflow-hidden shrink-0">
-                <div class="flex gap-1 mt-1 mb-2">${starsHTML}</div>
-                <h3 class="font-bold tracking-wider text-white text-center break-words w-full px-1 uppercase my-auto drop-shadow-md ${card.word.length > 8 ? 'text-2xl' : 'text-3xl'}">
-                    ${card.word}
-                </h3>
-                <div class="text-center w-full mt-auto mb-4 flex flex-col items-center">
-                    <p class="text-sm text-slate-300 line-clamp-2 px-1 font-medium">${card.translation}</p>
-                </div>
-                <div class="bg-[#0f172a]/80 w-full rounded-lg p-2 flex justify-between items-center text-base font-bold backdrop-blur-sm border border-white/5 mt-auto shadow-inner">
-                    <div class="flex items-center gap-1 text-rose-400"><i class="fas fa-heart text-sm"></i> ${card.hp}</div>
-                    <div class="flex items-center gap-1 text-indigo-300"><i class="fas fa-khanda text-sm"></i> ${card.atk}</div>
-                </div>
-            </div>`;
-        }
-
-        // --- UI 更新與切換 ---
-        window.switchTab = function(tabId) {
-            if(tabId === 'arena' && State.cards.length < 4) return;
-            
-            State.activeTab = tabId;
-            ['hangman', 'library', 'arena'].forEach(t => {
-                document.getElementById(`view-${t}`).classList.add('hidden');
-                const btn = document.getElementById(`tab-${t}`);
-                btn.classList.remove('text-indigo-400', 'active');
-                if(t !== 'arena' || State.cards.length >= 4) btn.classList.add('text-slate-400');
-            });
-            
-            document.getElementById(`view-${tabId}`).classList.remove('hidden');
-            document.getElementById(`tab-${tabId}`).classList.remove('text-slate-400');
-            document.getElementById(`tab-${tabId}`).classList.add('text-indigo-400', 'active');
-
-            if (tabId === 'library') renderLibrary();
-            if (tabId === 'arena') renderArena();
-        };
-
-        function updateUI() {
-            document.getElementById('total-cards-count').innerText = State.cards.length;
-            
-            const arenaBtn = document.getElementById('tab-arena');
-            const arenaIcon = document.getElementById('arena-icon');
-            const arenaLabel = document.getElementById('arena-label');
-            
-            if (State.cards.length >= 4) {
-                arenaBtn.disabled = false;
-                arenaBtn.classList.remove('text-slate-600', 'cursor-not-allowed');
-                if(State.activeTab !== 'arena') arenaBtn.classList.add('text-slate-400');
-                arenaIcon.className = 'fas fa-swords text-2xl mb-1 text-purple-400';
-                arenaLabel.innerText = '競技場';
-                if(State.isOfflineMode) arenaLabel.innerText = '競技場(離線)';
-            }
-
-            const unseenCount = State.cards.filter(c => c.isNew).length;
-            const badge = document.getElementById('badge-library');
-            if (unseenCount > 0 && State.activeTab !== 'library') {
-                badge.innerText = unseenCount;
-                badge.classList.remove('hidden');
-            } else { badge.classList.add('hidden'); }
-        }
-
-        // --- 卡牌百科彈窗 ---
-        window.showCardDetails = function(cardId) {
-            const card = State.cards.find(c => c.id === cardId);
-            if(!card) return;
-            
-            document.getElementById('card-modal').classList.remove('hidden');
-            document.getElementById('card-modal-content').innerHTML = `
-                <div class="w-48 mx-auto mb-6 transform hover:scale-105 transition-transform duration-300">
-                    ${generateCardHTML(card)}
-                </div>
-                <div class="w-full bg-[#0f172a] rounded-2xl p-5 text-left border border-slate-700 shadow-inner">
-                    <h4 class="text-indigo-400 font-bold mb-3 flex items-center gap-2 text-lg">
-                        <i class="fas fa-book-journal-whills"></i> 百科與字義解釋
-                    </h4>
-                    <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">${card.explanation || '暫無詳細解釋'}</p>
-                    
-                    <div class="mt-5 pt-4 border-t border-slate-700/50 flex justify-between items-center">
-                        <div class="bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-lg text-xs font-bold border border-indigo-500/20">
-                            評級: ${card.cefr || '???'}
-                        </div>
-                        <span class="text-xs text-slate-500 font-medium"><i class="far fa-clock"></i> 獲取於 ${new Date(card.createdAt).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        window.closeCardModal = function() {
-            document.getElementById('card-modal').classList.add('hidden');
-        }
-
-        // --- 猜單字邏輯 ---
-        window.initHangmanGame = async function() {
-            State.hangman.status = 'loading';
-            State.hangman.guessed = [];
-            State.hangman.mistakes = 0;
-            State.hangman.newCard = null;
-            State.hangman.details = null;
-            renderHangman();
-
-            try {
-                let newWord = "";
-                // 為了增加趣味，混用不同字庫（可產生一般字與專有名詞）
-                if(Math.random() > 0.4) {
-                    const topics = ["animals", "technology", "sports", "science", "astronomy", "movies"];
-                    const topic = topics[Math.floor(Math.random() * topics.length)];
-                    const res = await fetch(`https://api.datamuse.com/words?ml=${topic}&max=50`);
-                    const data = await res.json();
-                    const valid = data.filter(d => d.word.length >= 4 && d.word.length <= 9 && /^[a-zA-Z]+$/.test(d.word));
-                    newWord = valid[Math.floor(Math.random() * valid.length)].word.toUpperCase();
-                } else {
-                    const len = Math.floor(Math.random() * 5) + 4;
-                    const res = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`);
-                    const data = await res.json();
-                    newWord = data[0].toUpperCase();
-                }
-                State.hangman.word = newWord;
-                State.hangman.status = 'playing';
-                renderHangman();
-            } catch (err) {
-                State.hangman.word = 'WIKIPEDIA'; // Fallback
-                State.hangman.status = 'playing';
-                renderHangman();
-            }
-        }
-
-        window.handleGuess = function(letter) {
-            if (State.activeTab !== 'hangman' || State.hangman.status !== 'playing' || State.hangman.guessed.includes(letter)) return;
-            
-            State.hangman.guessed.push(letter);
-            
-            if (!State.hangman.word.includes(letter)) {
-                State.hangman.mistakes++;
-                if (State.hangman.mistakes >= State.hangman.maxMistakes) {
-                    handleHangmanOver('lost');
-                    return;
-                }
-            } else {
-                const isWon = State.hangman.word.split('').every(char => State.hangman.guessed.includes(char));
-                if (isWon) {
-                    handleHangmanOver('won');
-                    return;
-                }
-            }
-            renderHangman();
-        }
-
-        async function handleHangmanOver(result) {
-            State.hangman.status = 'saving';
-            renderHangman();
-            
-            const word = State.hangman.word.toLowerCase();
-            const details = await fetchWordDetails(word); // ★ 呼叫超強 AI 百科解析
-            State.hangman.details = details;
-            
-            const length = word.length;
-            const hp = length * 18 + Math.floor(Math.random() * 60) + 100;
-            const atk = length * 12 + Math.floor(Math.random() * 40) + 50;
-            const stars = details.isRare ? 5 : Math.min(5, Math.max(1, Math.floor(length / 2)));
-            
-            const cardData = {
-                word: State.hangman.word, translation: details.translation, explanation: details.explanation, cefr: details.cefr,
-                hp, atk, stars, isRare: details.isRare,
-                createdAt: Date.now(), isNew: true
-            };
-
-            State.hangman.newCard = cardData;
-
-            if (result === 'won') {
-                if (!State.isOfflineMode && State.user) {
-                    try {
-                        const cardsRef = collection(db, 'artifacts', appId, 'users', State.user.uid, 'cards');
-                        await addDoc(cardsRef, cardData);
-                    } catch (e) { showToast("雲端存檔失敗", true); }
-                } else {
-                    cardData.id = Date.now().toString();
-                    State.cards.push(cardData);
-                    localStorage.setItem('wordArenaCards', JSON.stringify(State.cards));
-                    updateUI();
-                }
-            }
-            
-            State.hangman.status = result;
-            renderHangman();
-        }
-
-        function renderHangman() {
-            const container = document.getElementById('hangman-container');
-            const hs = State.hangman;
-
-            if (hs.status === 'loading' || hs.status === 'saving') {
-                container.innerHTML = `
-                    <div class="flex flex-col items-center my-20 animate-fade-in text-center">
-                        <i class="fas ${hs.status === 'saving' ? 'fa-magnifying-glass' : 'fa-spinner fa-spin'} text-indigo-500 mb-6 text-6xl"></i>
-                        <p class="text-indigo-300 font-bold text-lg mb-2">${hs.status === 'saving' ? '正在搜尋網路百科與翻譯庫...' : '尋找下一個單字...'}</p>
-                        ${hs.status === 'saving' ? '<p class="text-slate-400 text-sm">這可能需要幾秒鐘的時間</p>' : ''}
-                    </div>`;
-                return;
-            }
-
-            if (hs.status === 'playing') {
-                let hangmanSVG = `
-                    <div class="h-40 w-40 relative border-l-4 border-b-4 border-slate-600 mb-2 mx-auto">
-                        <div class="absolute top-0 left-0 w-20 border-t-4 border-slate-600"></div>
-                        <div class="absolute top-0 left-20 h-8 border-l-4 border-slate-600"></div>
-                        ${hs.mistakes > 0 ? `<div class="absolute top-8 left-[68px] w-8 h-8 rounded-full border-4 border-rose-400"></div>` : ''}
-                        ${hs.mistakes > 1 ? `<div class="absolute top-16 left-[82px] h-12 border-l-4 border-slate-300"></div>` : ''}
-                        ${hs.mistakes > 2 ? `<div class="absolute top-20 left-12 w-8 border-t-4 border-slate-300 -rotate-45"></div>` : ''}
-                        ${hs.mistakes > 3 ? `<div class="absolute top-20 left-24 w-8 border-t-4 border-slate-300 rotate-45"></div>` : ''}
-                        ${hs.mistakes > 4 ? `<div class="absolute top-28 left-14 w-8 border-t-4 border-slate-300 rotate-45"></div>` : ''}
-                        ${hs.mistakes > 5 ? `<div class="absolute top-28 left-22 w-8 border-t-4 border-slate-300 -rotate-45"></div>` : ''}
-                    </div>`;
-
-                let wordHTML = hs.word.split('').map(char => {
-                    const isGuessed = hs.guessed.includes(char);
-                    return `<span class="text-3xl sm:text-4xl font-black border-b-4 w-10 sm:w-12 inline-block text-center pb-1 mx-1 ${isGuessed ? 'border-indigo-400 text-white' : 'border-slate-600 text-transparent'}">${isGuessed ? char : '_'}</span>`;
-                }).join('');
-
-                let keysHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(char => {
-                    const isUsed = hs.guessed.includes(char);
-                    return `
-                    <button onclick="handleGuess('${char}')" ${isUsed ? 'disabled' : ''}
-                        class="py-3 rounded-xl font-bold text-lg sm:text-xl transition-all ${isUsed ? 'bg-[#1e293b] text-slate-600 cursor-not-allowed border border-slate-800' : 'bg-[#1e293b] hover:bg-indigo-600 border border-slate-600 text-white shadow-md active:scale-95'}">
-                        ${char}
-                    </button>`;
-                }).join('');
-
-                container.innerHTML = `
-                    <div class="w-full flex flex-col items-center animate-fade-in px-2">
-                        <div class="mb-6 w-full flex flex-col items-center">
-                            ${hangmanSVG}
-                            <div class="text-rose-400 font-bold bg-rose-900/20 px-4 py-1.5 rounded-full border border-rose-900 mt-2 text-sm">剩餘生命: ${hs.maxMistakes - hs.mistakes}</div>
-                        </div>
-                        <div class="mb-10 text-center flex flex-wrap justify-center gap-y-6">${wordHTML}</div>
-                        <div class="grid grid-cols-7 gap-1.5 sm:gap-2 w-full max-w-lg mb-4">${keysHTML}</div>
-                    </div>`;
-                return;
-            }
-
-            // 結算畫面 (顯示百科知識)
-            if (hs.status === 'won' || hs.status === 'lost') {
-                const isWon = hs.status === 'won';
-                
-                let titleHTML = isWon 
-                    ? `<h2 class="text-3xl font-black mb-1 text-emerald-400 flex items-center justify-center gap-2">🎉 挑戰成功！</h2><p class="text-emerald-300 text-sm mb-6">你獲得了一張新卡牌！</p>`
-                    : `<h2 class="text-3xl font-black mb-1 text-rose-500 flex items-center justify-center gap-2">💀 遊戲結束</h2><p class="text-slate-400 text-sm mb-6">小人被吊死了，下次再接再厲！</p>`;
-
-                let cardOrContentHTML = '';
-                if (isWon && hs.newCard) {
-                    cardOrContentHTML = `
-                        <div class="w-full max-w-[220px] mb-6 animate-slide-up cursor-pointer hover:scale-105 transition-transform" onclick="showCardDetails('${hs.newCard.id || 'preview'}')">
-                            ${generateCardHTML(hs.newCard)}
-                        </div>
-                        <div class="bg-[#1e293b] p-4 rounded-xl border border-slate-600 mb-8 text-left w-full max-w-sm animate-zoom-in shadow-lg relative">
-                            <span class="absolute -top-3 left-4 bg-[#0f172a] px-2 text-xs font-bold text-indigo-400 border border-slate-600 rounded-full">📝 網路百科解析</span>
-                            <p class="text-slate-300 text-sm mt-1 leading-relaxed">${hs.details.explanation}</p>
-                        </div>
-                    `;
-                } else if (!isWon) {
-                    cardOrContentHTML = `
-                        <div class="bg-[#e8f5e9] text-slate-800 rounded-3xl p-6 w-full max-w-sm mb-8 border border-emerald-300 text-center animate-zoom-in shadow-xl overflow-hidden relative">
-                            <div class="absolute top-0 right-0 bg-emerald-500 text-white text-xs px-3 py-1 rounded-bl-xl font-bold">正解</div>
-                            <p class="text-emerald-800 font-bold text-sm mb-2 mt-2">答案單字：</p>
-                            <p class="text-4xl font-black tracking-widest text-[#0f172a] mb-5">${hs.word}</p>
-                            
-                            <div class="bg-white/60 rounded-xl p-4 text-left border border-emerald-200 shadow-inner">
-                                <p class="text-emerald-700 font-bold text-xs mb-2 flex items-center gap-1"><i class="fas fa-globe"></i> 百科與網路解釋：</p>
-                                <p class="text-slate-700 font-medium text-sm leading-relaxed">${hs.details ? hs.details.explanation : '無資料'}</p>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                container.innerHTML = `
-                    <div class="flex flex-col items-center w-full animate-fade-in mt-2">
-                        ${titleHTML}
-                        ${cardOrContentHTML}
-                        <button onclick="initHangmanGame()" class="bg-[#5c4dff] hover:bg-[#4b3ce0] text-white font-bold py-4 px-12 rounded-full shadow-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 active:scale-95 text-lg w-full max-w-sm">
-                            再猜一次 <kbd class="hidden sm:inline-block ml-1 text-xs bg-black/20 px-2 py-0.5 rounded border border-white/20 font-mono">Enter</kbd>
-                        </button>
-                    </div>`;
-            }
-        }
-
-        // --- 卡牌庫 ---
-        function renderLibrary() {
-            const container = document.getElementById('library-container');
-            
-            if (!State.isOfflineMode) {
-                State.cards.forEach(card => {
-                    if(card.isNew && State.user) {
-                        const cardRef = doc(db, 'artifacts', appId, 'users', State.user.uid, 'cards', card.id);
-                        updateDoc(cardRef, { isNew: false }).catch(()=>{});
-                    }
-                });
-            } else {
-                let updated = false;
-                State.cards.forEach(c => { if(c.isNew){ c.isNew = false; updated = true; }});
-                if(updated) localStorage.setItem('wordArenaCards', JSON.stringify(State.cards));
-            }
-            updateUI(); 
-
-            if (State.cards.length === 0) {
-                container.innerHTML = `<div class="col-span-full text-center text-slate-500 py-20 w-full flex flex-col items-center"><i class="fas fa-ghost text-4xl mb-4 text-slate-700"></i>目前沒有卡牌。快去猜單字收集百科知識吧！</div>`;
-                return;
-            }
-
-            container.innerHTML = State.cards.map(card => `
-                <div class="w-full max-w-[180px] transform transition-transform hover:scale-105 hover:-translate-y-2 cursor-pointer relative group" onclick="showCardDetails('${card.id}')">
-                    ${card.isNew ? '<span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full z-20 shadow animate-pulse">New</span>' : ''}
-                    ${generateCardHTML(card)}
-                </div>
-            `).join('');
-        }
-
-        // --- 競技場邏輯 ---
-        window.toggleCardSelection = function(cardId) {
-            const card = State.cards.find(c => c.id === cardId);
-            const existsIdx = State.arena.selectedDeck.findIndex(c => c.id === cardId);
-            if (existsIdx >= 0) State.arena.selectedDeck.splice(existsIdx, 1);
-            else if (State.arena.selectedDeck.length < 4) State.arena.selectedDeck.push(card);
-            renderArena();
-        }
-
-        window.setArenaView = function(view) {
-            if(State.isOfflineMode) { showToast("目前為單機模式，無法進入連線大廳！", true); return; }
-            State.arena.view = view;
-            
-            if (view === 'lobby' && !State.arena.unsubscribeMatchList && db) {
-                const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
-                State.arena.unsubscribeMatchList = onSnapshot(matchesRef, (snapshot) => {
-                    const allMatches = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    State.arena.rooms = allMatches.filter(m => m.status === 'waiting' && m.player1 !== State.user.uid);
-                    
-                    if (State.arena.matchId) {
-                        const myMatch = allMatches.find(m => m.id === State.arena.matchId);
-                        if (myMatch) {
-                            State.arena.matchData = myMatch;
-                            if (myMatch.status === 'playing') State.arena.view = 'room';
-                            if (myMatch.player1 === State.user.uid && myMatch.status === 'playing') {
-                                if (myMatch.p1State.ready && myMatch.p2State.ready && !myMatch.resolving) resolveRound(myMatch.id, myMatch);
-                            }
-                        } else {
-                            State.arena.matchId = null; State.arena.matchData = null; State.arena.view = 'lobby';
-                        }
-                    }
-                    if(State.activeTab === 'arena') renderArena();
-                });
-            }
-            renderArena();
-        }
-
-        async function resolveRound(id, match) {
-            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', id);
-            await updateDoc(matchRef, { resolving: true });
-            
-            const p1Card = match.p1State.team[match.p1State.currentCardIndex];
-            const p2Card = match.p2State.team[match.p2State.currentCardIndex];
-            let p1Dmg = p1Card.atk; let p2Dmg = p2Card.atk;
-            if (p1Card.isRare) p2Dmg = 0; if (p2Card.isRare) p1Dmg = 0;
-            const p1Remain = p1Card.hp - p2Dmg; const p2Remain = p2Card.hp - p1Dmg;
-            let p1Wins = match.p1State.wins; let p2Wins = match.p2State.wins;
-            
-            if (p1Remain > p2Remain) p1Wins++; else if (p2Remain > p1Remain) p2Wins++;
-            const nextRound = match.round + 1; const isGameOver = nextRound > 3;
-
-            setTimeout(async () => {
-                await updateDoc(matchRef, {
-                    status: isGameOver ? 'finished' : 'playing', round: nextRound, resolving: false,
-                    'p1State.wins': p1Wins, 'p2State.wins': p2Wins, 'p1State.ready': false, 'p2State.ready': false,
-                    'p1State.usedCards': [...match.p1State.usedCards, match.p1State.currentCardIndex],
-                    'p2State.usedCards': [...match.p2State.usedCards, match.p2State.currentCardIndex],
-                    'p1State.currentCardIndex': null, 'p2State.currentCardIndex': null,
-                    lastResult: { round: match.round, p1Card, p2Card, p1Dmg, p2Dmg, p1Remain, p2Remain }
-                });
-            }, 3500);
-        }
-
-        window.createRoom = async function() {
-            if(State.isOfflineMode) return;
-            const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
-            const newDoc = await addDoc(matchesRef, {
-                status: 'waiting', player1: State.user.uid, p1Name: '玩家 ' + State.user.uid.slice(-4),
-                p1State: { team: State.arena.selectedDeck, currentCardIndex: null, wins: 0, ready: false, usedCards: [] },
-                round: 1, resolving: false, createdAt: Date.now()
-            });
-            State.arena.matchId = newDoc.id; State.arena.view = 'room'; renderArena();
-        }
-
-        window.joinRoom = async function(roomId) {
-            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', roomId);
-            await updateDoc(matchRef, {
-                status: 'playing', player2: State.user.uid, p2Name: '玩家 ' + State.user.uid.slice(-4),
-                p2State: { team: State.arena.selectedDeck, currentCardIndex: null, wins: 0, ready: false, usedCards: [] }
-            });
-            State.arena.matchId = roomId; State.arena.view = 'room'; renderArena();
-        }
-
-        window.leaveRoom = async function() {
-            if (State.arena.matchId && State.arena.matchData && State.arena.matchData.player1 === State.user.uid && State.arena.matchData.status === 'waiting') {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', State.arena.matchId));
-            }
-            State.arena.matchId = null; State.arena.matchData = null; State.arena.view = 'lobby'; renderArena();
-        }
-
-        window.playArenaCard = async function(index) {
-            if(!State.arena.matchId || !State.arena.matchData || State.isOfflineMode) return;
-            const isPlayer1 = State.arena.matchData.player1 === State.user.uid;
-            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', State.arena.matchId);
-            if(isPlayer1) await updateDoc(matchRef, { 'p1State.currentCardIndex': index, 'p1State.ready': true });
-            else await updateDoc(matchRef, { 'p2State.currentCardIndex': index, 'p2State.ready': true });
-        }
-
-        function renderArena() {
-            const container = document.getElementById('arena-container');
-            const view = State.arena.view;
-
-            if (view === 'deck_select') {
-                const deckHTML = State.arena.selectedDeck.map(card => `
-                    <div class="relative scale-75 origin-top -mx-4 cursor-pointer hover:-translate-y-2 transition-transform shrink-0" onclick="toggleCardSelection('${card.id}')">
-                        <div class="absolute -top-2 -right-2 bg-rose-500 rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold z-20 shadow-md border-2 border-[#0f172a]"><i class="fas fa-times"></i></div>
-                        ${generateCardHTML(card)}
-                    </div>
-                `).join('');
-
-                const cardsHTML = State.cards.map(card => {
-                    const isSelected = State.arena.selectedDeck.find(c => c.id === card.id);
-                    return `<div onclick="toggleCardSelection('${card.id}')" class="cursor-pointer transition-all ${isSelected ? 'ring-4 ring-indigo-500 scale-95 opacity-50 rounded-xl' : 'hover:scale-105'}">${generateCardHTML(card)}</div>`;
-                }).join('');
-
-                container.innerHTML = `
-                <div class="animate-fade-in pb-10 w-full">
-                    <h2 class="text-2xl font-black text-center mb-2 text-indigo-400">⚔️ 組建牌組</h2>
-                    <p class="text-slate-400 text-sm text-center mb-6">點擊下方卡牌選擇 <strong class="text-white text-lg">${State.arena.selectedDeck.length}/4</strong> 張，進入三戰兩勝對決！</p>
-                    <div class="flex justify-center gap-2 mb-6 min-h-[160px] p-4 bg-[#1e293b] rounded-2xl border border-slate-700 w-full overflow-x-auto shadow-inner no-scrollbar items-start">
-                        ${State.arena.selectedDeck.length === 0 ? '<div class="text-slate-500 my-auto flex flex-col items-center"><i class="fas fa-hand-pointer text-2xl mb-2"></i>點擊下方卡牌加入</div>' : deckHTML}
-                    </div>
-                    <button onclick="setArenaView('lobby')" ${State.arena.selectedDeck.length !== 4 ? 'disabled' : ''} class="w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex justify-center items-center gap-2 mb-8 ${State.arena.selectedDeck.length === 4 ? 'bg-[#5c4dff] hover:bg-[#4b3ce0] text-white active:scale-95' : 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'}">
-                        <i class="fas fa-sign-in-alt text-xl"></i> 進入對戰大廳 ${State.isOfflineMode ? '(單機模式不可用)' : ''}
-                    </button>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">${cardsHTML}</div>
-                </div>`;
-                return;
-            }
-
-            if (view === 'lobby') {
-                const roomsHTML = State.arena.rooms.length === 0 
-                    ? `<div class="text-center text-slate-500 py-12 bg-[#1e293b]/50 rounded-2xl border border-slate-700 border-dashed">目前沒有玩家開房，自己創建一個吧！</div>`
-                    : State.arena.rooms.map(room => `
-                        <div class="bg-[#1e293b] border border-slate-600 p-4 rounded-xl flex justify-between items-center hover:bg-slate-700 transition-colors shadow-md">
-                            <div class="flex items-center gap-3">
-                                <div class="bg-[#0f172a] p-2.5 rounded-full"><i class="fas fa-spinner fa-spin text-indigo-400"></i></div>
-                                <span class="font-bold text-lg">${room.p1Name} <span class="text-slate-400 text-sm font-normal">的擂台</span></span>
-                            </div>
-                            <button onclick="joinRoom('${room.id}')" class="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-lg font-bold shadow-md">加入</button>
-                        </div>
-                    `).join('');
-
-                container.innerHTML = `
-                <div class="animate-fade-in w-full max-w-lg mx-auto">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-indigo-400"><i class="fas fa-globe"></i> 對戰大廳</h2>
-                        <button onclick="setArenaView('deck_select')" class="text-sm text-slate-400 bg-slate-800 px-3 py-1 rounded-full hover:bg-slate-700">重新選牌</button>
-                    </div>
-                    <button onclick="createRoom()" class="w-full bg-[#5c4dff] hover:bg-[#4b3ce0] text-white font-bold py-4 rounded-xl mb-8 flex justify-center items-center gap-2 shadow-lg shadow-indigo-900/30 active:scale-95 transition-transform">
-                        <i class="fas fa-plus-circle text-xl"></i> 創建我的房間
-                    </button>
-                    <h3 class="text-slate-400 font-bold mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">可加入的房間</h3>
-                    <div class="space-y-3">${roomsHTML}</div>
-                </div>`;
-                return;
-            }
-
-            if (view === 'room') {
-                const match = State.arena.matchData;
-                if (!match) return;
-
-                if (match.status === 'waiting') {
-                    container.innerHTML = `
-                    <div class="flex flex-col items-center justify-center py-20 animate-fade-in text-center">
-                        <div class="relative mb-8"><i class="fas fa-circle-notch fa-spin text-[#5c4dff] text-7xl"></i></div>
-                        <h2 class="text-2xl font-black mb-2 text-white">等待對手加入...</h2>
-                        <p class="text-slate-400 mb-10">你的擂台已經準備好了</p>
-                        <button onclick="leaveRoom()" class="px-8 py-3 border border-rose-500/50 text-rose-400 font-bold rounded-full hover:bg-rose-900/20 transition-colors">取消並離開</button>
-                    </div>`;
-                    return;
-                }
-
-                const isP1 = match.player1 === State.user.uid;
-                const mySt = isP1 ? match.p1State : match.p2State;
-                const opSt = isP1 ? match.p2State : match.p1State;
-                const res = match.resolving;
-                const fin = match.status === 'finished';
-
-                let opCardHTML = '';
-                if (res && match.lastResult) {
-                    const dmg = isP1 ? match.lastResult.p2Dmg : match.lastResult.p1Dmg;
-                    opCardHTML = `<div class="animate-slide-down relative">${generateCardHTML(isP1 ? match.lastResult.p2Card : match.lastResult.p1Card)}<div class="absolute -bottom-4 right-0 bg-rose-600 text-white font-black px-3 py-1 rounded-lg text-xl rotate-12 shadow-lg border border-white z-20">-${dmg}</div></div>`;
-                } else if (opSt.ready) opCardHTML = `<div class="animate-slide-down">${generateCardHTML({}, true)}</div>`;
-                else opCardHTML = `<div class="w-full max-w-[200px] aspect-[3/4] border border-dashed border-slate-600 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-[#1e293b]/50"><i class="fas fa-ellipsis-h animate-pulse text-2xl mb-2"></i>對手思考中</div>`;
-
-                let myCardHTML = '';
-                if (res && match.lastResult) {
-                    const dmg = isP1 ? match.lastResult.p1Dmg : match.lastResult.p2Dmg;
-                    myCardHTML = `<div class="animate-slide-up relative">${generateCardHTML(isP1 ? match.lastResult.p1Card : match.lastResult.p2Card)}<div class="absolute -top-4 right-0 bg-rose-600 text-white font-black px-3 py-1 rounded-lg text-xl -rotate-12 shadow-lg border border-white z-20">-${dmg}</div></div>`;
-                } else if (mySt.ready) myCardHTML = `<div class="animate-slide-up">${generateCardHTML(mySt.team[mySt.currentCardIndex])}</div>`;
-                else myCardHTML = `<div class="w-full max-w-[200px] aspect-[3/4] border-2 border-dashed border-indigo-500/50 rounded-xl flex items-center justify-center text-indigo-400 bg-indigo-900/10 font-bold">請從下方出牌</div>`;
-
-                let handHTML = '';
-                if (!fin) {
-                    handHTML = `
-                        <div class="w-full mt-4 transition-opacity duration-300 ${mySt.ready || res ? 'opacity-50 pointer-events-none' : 'opacity-100'} pb-6">
-                            <p class="text-center font-bold text-slate-300 mb-3 text-sm">${mySt.ready ? '等待交鋒...' : '點擊選擇出戰卡牌'}</p>
-                            <div class="flex justify-center gap-2 overflow-x-auto px-2 no-scrollbar min-h-[140px] items-end">
-                                ${mySt.team.map((card, idx) => {
-                                    const used = mySt.usedCards.includes(idx);
-                                    return `
-                                    <div onclick="!${used} && !${mySt.ready} && playArenaCard(${idx})"
-                                         class="transform transition-all w-[100px] shrink-0
-                                            ${used ? 'opacity-20 grayscale cursor-not-allowed scale-90' : 'cursor-pointer hover:-translate-y-4 hover:scale-105'}
-                                            ${mySt.currentCardIndex === idx ? 'ring-4 ring-indigo-500 -translate-y-4 rounded-xl' : ''}">
-                                        <div class="scale-[0.55] origin-bottom -mx-8 -mb-16 pointer-events-none">${generateCardHTML(card)}</div>
-                                    </div>`;
-                                }).join('')}
-                            </div>
-                        </div>`;
-                }
-
-                container.innerHTML = `
-                <div class="flex flex-col h-full items-center w-full max-w-lg mx-auto animate-fade-in relative">
-                    <div class="w-full flex justify-between items-center mb-4 bg-[#1e293b] p-3 rounded-2xl border border-slate-700 shadow-md">
-                        <div class="flex items-center gap-3 w-1/3">
-                            <div class="bg-blue-500/20 text-blue-400 p-2 rounded-lg text-xl font-black border border-blue-500/30 w-12 text-center">${mySt.wins}</div>
-                            <span class="text-sm font-bold text-slate-300">我方</span>
-                        </div>
-                        <div class="text-center w-1/3">
-                            <span class="text-xs text-slate-500 font-bold uppercase tracking-widest">Round</span>
-                            <div class="text-xl font-black text-white">${Math.min(match.round, 3)}/3</div>
-                        </div>
-                        <div class="flex items-center justify-end gap-3 w-1/3">
-                            <span class="text-sm font-bold text-slate-300">對手</span>
-                            <div class="bg-rose-500/20 text-rose-400 p-2 rounded-lg text-xl font-black border border-rose-500/30 w-12 text-center">${opSt.wins}</div>
-                        </div>
-                    </div>
-                    <div class="w-full flex flex-col justify-between items-center relative py-8 my-2 bg-gradient-to-b from-[#1e293b] to-[#0f172a] rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[420px]">
-                        <div class="w-full flex justify-center transform scale-[0.85] absolute top-2">${opCardHTML}</div>
-                        <div class="z-10 flex items-center justify-center bg-[#0f172a] rounded-full p-4 border border-slate-600 shadow-lg relative my-auto">
-                            <i class="fas fa-bolt text-2xl text-yellow-400"></i>
-                        </div>
-                        <div class="w-full flex justify-center transform scale-[0.85] absolute bottom-2">${myCardHTML}</div>
-                    </div>
-                    ${fin ? `
-                        <div class="w-full bg-[#1e293b] border border-indigo-500/50 rounded-2xl p-6 text-center animate-zoom-in shadow-xl mt-4">
-                            <h2 class="text-3xl font-black mb-6 ${mySt.wins > opSt.wins ? 'text-emerald-400' : 'text-slate-400'}">
-                                ${mySt.wins > opSt.wins ? '🎉 勝利！' : mySt.wins < opSt.wins ? '💀 敗北' : '🤝 平手'}
-                            </h2>
-                            <button onclick="leaveRoom()" class="bg-[#5c4dff] hover:bg-[#4b3ce0] text-white font-bold py-3 px-10 rounded-full shadow-md w-full">返回大廳</button>
-                        </div>
-                    ` : handHTML}
-                </div>`;
-            }
-        }
-
-        // --- 鍵盤監聽 ---
-        document.addEventListener('keydown', (e) => {
-            if (State.activeTab !== 'hangman') return;
-            if (State.hangman.status === 'playing' && /^[a-zA-Z]$/.test(e.key)) {
-                handleGuess(e.key.toUpperCase());
-            } else if ((State.hangman.status === 'won' || State.hangman.status === 'lost') && e.key === 'Enter') {
-                initHangmanGame();
-            }
-        });
-
-        // 啟動
-        initApp();
-    </script>
+      `).join('')}
+    </div>`).join('');
+}
+
+// Render modal content from card data (can be called multiple times as data loads)
+function renderModalContent(card){
+  const mc = document.getElementById('mcontent');
+  if(!mc) return;
+  const cc = cCol(card.cefr);
+  const starsH = Array.from({length:6},(_,i)=>ICO.star(i<card.stars,cc)).join('');
+  const mHTML  = buildMeaningsHTML(card.meanings);
+
+  // Show meanings OR explanation fallback
+  let dictSection = '';
+  if(mHTML){
+    dictSection = `
+    <div class="dsec">
+      <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.book} 字義與詞性</div>
+      ${mHTML}
+    </div>`;
+  } else if(card.explanation){
+    // Old-style explanation string — parse if it looks like 【pos】def format
+    const expLines = card.explanation.split('\n').filter(Boolean);
+    const parsedBlocks = expLines.map(line=>{
+      const m = line.match(/^【([^】]+)】(.+)/);
+      if(m) return `<div style="margin-bottom:10px"><span class="ptag">${m[1]}</span><div class="ddef" style="margin-top:4px">• ${m[2]}</div></div>`;
+      return `<div style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:6px">${line}</div>`;
+    }).join('');
+    dictSection = `
+    <div class="dsec">
+      <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.book} 字義說明</div>
+      ${parsedBlocks}
+    </div>`;
+  } else {
+    dictSection = `
+    <div class="dsec" id="dict-loading-${card.id}">
+      <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.book} 字義與詞性</div>
+      <div style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:7px">
+        ${ICO.spin} 查詢字典中…
+      </div>
+    </div>`;
+  }
+
+  // Wikipedia section (for rare/proper nouns)
+  const wikiSection = (card.isRare && card.explanation && !card.explanation.startsWith('【'))
+    ? `<div class="dsec">
+        <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.globe} Wikipedia</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.75">${card.explanation}</div>
+      </div>` : '';
+
+  mc.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+    <button onclick="cModal()" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+      ${ICO.x}
+    </button>
+    <div style="text-align:right">
+      <div style="display:flex;gap:2px;justify-content:flex-end;margin-bottom:3px">${starsH}</div>
+      <div class="tag" style="font-size:10px;color:${cc};border-color:${cc}35;background:${cBg(card.cefr)}">${card.cefr}</div>
+    </div>
+  </div>
+
+  <div style="width:130px;margin:0 auto 14px"><div class="cw">${cardH(card)}</div></div>
+
+  <div style="text-align:center;margin-bottom:16px">
+    <div class="ko" style="font-size:26px;letter-spacing:3px;color:#fff">${card.word}</div>
+    ${card.phonetic ? `<div style="font-size:12px;color:var(--muted);margin-top:3px">${card.phonetic}</div>` : ''}
+    ${card.translation
+      ? `<div style="font-size:17px;font-weight:700;color:var(--accent2);margin-top:6px;padding:6px 14px;background:var(--bg3);border-radius:8px;display:inline-block;border:1px solid var(--border)">
+           中文翻譯：${card.translation}
+         </div>`
+      : ''}
+  </div>
+
+  ${dictSection}
+  ${wikiSection}
+
+  <div class="dsec">
+    <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.chart} 卡牌數值</div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:8px">
+      <div style="flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:10px;color:#ff6b6b;font-weight:700;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:3px">${ICO.heart} HP</div>
+        <div style="font-size:24px;font-weight:900;color:#ff6b6b">${card.hp}</div>
+      </div>
+      <div style="flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:10px;color:#74b9ff;font-weight:700;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:3px">${ICO.bolt} ATK</div>
+        <div style="font-size:24px;font-weight:900;color:#74b9ff">${card.atk}</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.6">
+      CEFR 越高 × 字義越豐富 × 猜測越準確 → 數值越強
+    </div>
+  </div>`;
+}
+
+async function oModal(cid){
+  const card = S.cards.find(c=>c.id===cid); if(!card) return;
+  document.getElementById('mbg').classList.add('on');
+
+  // Render immediately with what we have
+  renderModalContent(card);
+
+  // If card is missing meanings AND explanation — it's an old/incomplete card; refetch now
+  const needsRefetch = (!card.meanings || !card.meanings.length) && !card.explanation;
+  const hasNoTranslation = !card.translation || /^[a-zA-Z]/.test(card.translation) && card.translation.toLowerCase() === card.wordLower;
+
+  if(needsRefetch || hasNoTranslation){
+    // Show loading indicator if no dict data
+    const wd = await fetchWordData(card.wordLower || card.word.toLowerCase());
+    // Patch the card in-place
+    if(wd.meanings?.length)   card.meanings    = wd.meanings;
+    if(wd.explanation)        card.explanation  = wd.explanation;
+    if(wd.phonetic)           card.phonetic     = wd.phonetic;
+    if(wd.translation && !/^[a-zA-Z]/.test(wd.translation)) card.translation = wd.translation;
+    if(wd.cefr && card.cefr !== wd.cefr){
+      card.cefr  = wd.cefr;
+      card.stars = c2s(wd.cefr);
+    }
+    save();
+    // Re-render modal with fresh data (only if still open)
+    if(document.getElementById('mbg').classList.contains('on')){
+      renderModalContent(card);
+    }
+  }
+}
+
+function cModal(){ document.getElementById('mbg').classList.remove('on'); }
+
+// ════════════════════════════════
+// NAV
+// ════════════════════════════════
+function unlockNav(){ document.getElementById('nb-library').classList.remove('lk'); }
+function goTab(tab){
+  if(tab==='library' && !S.unlockedLib){ toast('先猜出第一個單字來解鎖！'); return; }
+  if(tab==='arena'   && S.cards.length<4){ toast(`競技場需要 4 張卡牌（目前 ${S.cards.length} 張）`); return; }
+  S.tab=tab;
+  ['hangman','library','arena'].forEach(t=>{
+    document.getElementById(`view-${t}`).classList.toggle('on', t===tab);
+    document.getElementById(`nb-${t}`).classList.toggle('on', t===tab);
+  });
+  if(tab==='library') renderLib();
+  if(tab==='arena' && S.ar.phase==='mode') renderAMode();
+}
+function updHdr(){
+  document.getElementById('hcount').textContent = S.cards.length;
+  if(S.cards.length>=4) document.getElementById('nb-arena').classList.remove('lk');
+}
+
+// ════════════════════════════════════════
+// ARENA
+// ════════════════════════════════════════
+function aBack(){
+  if(S.ar.conn){try{S.ar.conn.close()}catch(e){}S.ar.conn=null;}
+  if(S.ar.peer){try{S.ar.peer.destroy()}catch(e){}S.ar.peer=null;}
+  S.ar.phase='mode'; S.ar.deck=[]; renderAMode();
+}
+const aIn = ()=>document.getElementById('arena-inner');
+
+// ── Mode select ──
+function renderAMode(){
+  aIn().innerHTML=`
+  <div style="padding:6px 0 14px">
+    <div style="font-size:11px;color:var(--muted);text-align:center;letter-spacing:1px;margin-bottom:16px">選擇對戰模式</div>
+    <div class="mcard" onclick="aSel('ai')">
+      <div class="mico" style="background:#7c6aff22;color:var(--accent)">${ICO.robot}</div>
+      <div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:2px">AI 對戰</div>
+        <div style="font-size:12px;color:var(--muted)">和電腦進行三局兩勝，隨時可玩</div>
+      </div>
+      <span style="color:var(--muted);margin-left:auto;flex-shrink:0">${ICO.chevR}</span>
+    </div>
+    <div class="mcard" onclick="aSel('net')">
+      <div class="mico" style="background:#ff6ab022;color:var(--accent2)">${ICO.wifi}</div>
+      <div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:2px">連線對戰</div>
+        <div style="font-size:12px;color:var(--muted)">6位房間碼，P2P 零設定與朋友對戰</div>
+      </div>
+      <span style="color:var(--muted);margin-left:auto;flex-shrink:0">${ICO.chevR}</span>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:8px">
+      <div style="font-size:11px;color:var(--muted);line-height:1.75;display:flex;align-items:flex-start;gap:6px">
+        <span style="color:var(--accent);flex-shrink:0;margin-top:1px">${ICO.info}</span>
+        <span>三局兩勝制。贏家可從對手<strong style="color:#fff">出戰牌</strong>隨機搶走一張！需選 4 張卡牌出戰。</span>
+      </div>
+    </div>
+  </div>`;
+}
+function aSel(mode){ S.ar._mode=mode; S.ar.deck=[]; S.ar.phase='deck'; renderDeck(); }
+
+// ── Deck select ──
+function renderDeck(){
+  const si=new Set(S.ar.deck.map(c=>c.id));
+  const slots=Array.from({length:4},(_,i)=>{
+    const c=S.ar.deck[i];
+    return `<div style="flex:1;min-width:0">${c
+      ? `<div class="cw" onclick="toggleDeck('${c.id}')" style="position:relative">${cardH(c)}
+           <div style="position:absolute;top:4px;right:4px;background:var(--danger);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center">${ICO.x}</div>
+         </div>`
+      : `<div class="dslot">${ICO.plus}</div>`
+    }</div>`;
+  }).join('');
+  aIn().innerHTML=`
+  <div style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:800;margin-bottom:8px">選擇牌組（${S.ar.deck.length}/4）</div>
+    <div style="display:flex;gap:7px">${slots}</div>
+  </div>
+  <div class="dvd"></div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:8px">點擊卡牌加入牌組（共 ${S.cards.length} 張）</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+    ${S.cards.map(c=>{
+      const sel=si.has(c.id);
+      return `<div class="cw" onclick="toggleDeck('${c.id}')" style="opacity:${sel?.38:1};${sel?'pointer-events:none':''}">${cardH(c)}</div>`;
+    }).join('')}
+  </div>
+  <button class="btn btnp" style="width:100%;font-size:15px" ${S.ar.deck.length!==4?'disabled':''} onclick="startBattle_${S.ar._mode}()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6 2 2-6 6z"/><path d="M3 21l4-4"/></svg>
+    出戰！
+  </button>`;
+}
+function toggleDeck(cid){
+  const idx=S.ar.deck.findIndex(c=>c.id===cid);
+  if(idx>=0) S.ar.deck.splice(idx,1);
+  else if(S.ar.deck.length<4){ const c=S.cards.find(c=>c.id===cid); if(c) S.ar.deck.push(c); }
+  renderDeck();
+}
+
+// ════════════════════════════════
+// AI BATTLE
+// ════════════════════════════════
+function startBattle_ai(){
+  // AI picks from cards NOT in player's deck (no duplicates)
+  const deckIds = new Set(S.ar.deck.map(c=>c.id));
+  const pool = [...S.cards].filter(c=>!deckIds.has(c.id)).sort(()=>Math.random()-.5);
+  // If not enough unique cards, fill remainder randomly (shouldn't happen with 4+ cards)
+  let aiHand = pool.slice(0,4);
+  if(aiHand.length < 4){
+    const extra = [...S.cards].sort(()=>Math.random()-.5).slice(0, 4-aiHand.length);
+    aiHand = [...aiHand, ...extra];
+  }
+  S.ar.ai={hand:aiHand, used:new Set()};
+  S.ar.pl={hand:[...S.ar.deck], used:new Set()};
+  S.ar.round=1; S.ar.plW=0; S.ar.aiW=0; S.ar.rr=null;
+  S.ar.phase='ai_battle'; S.ar.animating=false;
+  renderAI();
+}
+
+function rrBlock(rr, myLabel, opLabel){
+  const pw=rr.plR>rr.opR, draw=rr.plR===rr.opR;
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:11px;text-align:center">
+    <div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ROUND ${rr.round} RESULT</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;justify-content:center;margin-bottom:12px">
+      <div style="flex:1;text-align:center">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px">${myLabel}</div>
+        <div style="width:72px;margin:0 auto;animation:cardFlip .4s ease">${cardH(rr.plC,true)}</div>
+        <div style="font-size:13px;font-weight:900;margin-top:5px;color:var(--danger);animation:dmgPop .4s .3s both">−${rr.opDmg}</div>
+      </div>
+      <div style="font-size:20px;font-weight:900;color:var(--muted);padding-bottom:20px">VS</div>
+      <div style="flex:1;text-align:center">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px">${opLabel}</div>
+        <div style="width:72px;margin:0 auto;animation:cardFlip .4s .15s ease both">${cardH(rr.opC||rr.aiC,true)}</div>
+        <div style="font-size:13px;font-weight:900;margin-top:5px;color:var(--danger);animation:dmgPop .4s .45s both">−${rr.plDmg}</div>
+      </div>
+    </div>
+    <div style="font-weight:800;font-size:14px;padding:8px 16px;border-radius:8px;display:inline-block;background:${draw?'#fbbf2420':pw?'#00d68f20':'#ff4d6d20'};color:${draw?'#fbbf24':pw?'var(--ok)':'var(--danger)'}">
+      ${draw?'⚖️ 平局':pw?'✅ 你勝這局！':'❌ 對手勝這局'}
+    </div>
+  </div>`;
+}
+
+function scoreHUD(myW, opW, round){
+  return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;margin-bottom:11px;display:flex;justify-content:space-between;align-items:center">
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">你</div><div style="font-size:26px;font-weight:900;color:var(--ok)">${myW}</div></div>
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:2px">ROUND</div><div style="font-size:20px;font-weight:900">${Math.min(round,3)}/3</div></div>
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">對手</div><div style="font-size:26px;font-weight:900;color:var(--danger)">${opW}</div></div>
+  </div>`;
+}
+
+function gameOverBlock(iWon, myW, opW, stolen, btn1, btn2){
+  return `<div style="text-align:center;padding:28px 0 18px">
+    <div style="font-size:52px;margin-bottom:6px">${iWon?'🏆':'💀'}</div>
+    <div class="ko" style="font-size:30px;color:${iWon?'var(--ok)':'var(--danger)'}">${iWon?'VICTORY!':'DEFEATED'}</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:3px">${myW} : ${opW}</div>
+  </div>
+  ${iWon && stolen ? `<div style="background:var(--bg2);border:1px solid #facc1535;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px">
+    <div style="font-size:12px;color:#facc15;font-weight:700;margin-bottom:8px">🎉 搶到了對手的卡牌！</div>
+    <div style="width:110px;margin:0 auto" class="cdrop">${cardH(stolen)}</div>
+  </div>` : ''}
+  <button class="btn btnp" style="width:100%;margin-bottom:8px" onclick="${btn1}">${ICO.refresh} 繼續猜單字</button>
+  <button class="btn btns" style="width:100%" onclick="${btn2}">${ICO.back} 返回競技場</button>`;
+}
+
+// 卡牌背面 HTML（對手手牌用）
+function cardBack(){
+  return `<div class="ci" style="background:linear-gradient(135deg,#1a1a3e,#0f0f2a);border-color:#3a3a6a">
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;opacity:.4">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17" stroke-width="3"/></svg>
+    </div>
+    <div style="font-size:9px;color:#3a3a6a;text-align:center;font-weight:700;padding-bottom:4px">???</div>
+  </div>`;
+}
+
+function renderAI(){
+  const ar=S.ar, pw=ar.plW, aw=ar.aiW, r=ar.round;
+  if(pw>=2||aw>=2||r>3){
+    aIn().innerHTML = gameOverBlock(pw>aw, pw, aw, ar.rr?.stolen, "startHM();goTab('hangman')", "aBack()");
+    return;
+  }
+  const isAnimating = ar.animating;
+  const hH = ar.pl.hand.map((c,i)=>{
+    const u=ar.pl.used.has(i);
+    return `<div class="hcard ${u?'used':''}" onclick="if(!${u}&&!${isAnimating})playAI(${i})">${cardH(c,true)}</div>`;
+  }).join('');
+  aIn().innerHTML=`
+  ${scoreHUD(pw, aw, r)}
+  ${ar.rr ? rrBlock({...ar.rr, opC:ar.rr.aiC}, '你', 'AI') : ''}
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;${isAnimating?'opacity:.5;pointer-events:none':''}">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">${isAnimating?'交鋒中…':'選擇出戰卡牌（點擊出牌）'}</div>
+    <div class="hand-row">${hH}</div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">
+    ${ICO.info} ATK 互相攻擊，剩餘 HP 高的獲勝
+  </div>`;
+}
+
+function playAI(idx){
+  const ar=S.ar; if(ar.pl.used.has(idx)||ar.animating) return;
+  const plC=ar.pl.hand[idx];
+  const avail=[...ar.ai.hand.keys()].filter(i=>!ar.ai.used.has(i));
+  if(!avail.length) return;
+  const aiIdx=avail[~~(Math.random()*avail.length)];
+  const aiC=ar.ai.hand[aiIdx];
+  ar.pl.used.add(idx); ar.ai.used.add(aiIdx);
+  ar.animating=true; renderAI(); // show locked state
+
+  setTimeout(()=>{
+    const plDmg=aiC.atk, opDmg=plC.atk;
+    const plR=plC.hp-plDmg, opR=aiC.hp-opDmg;
+    const pw=plR>opR, draw=plR===opR;
+    if(pw) ar.plW++; else if(!draw) ar.aiW++;
+    const rr={round:ar.round, plC, aiC, opC:aiC, plDmg, opDmg, plR, opR, stolen:null};
+    ar.round++; ar.animating=false;
+    const over=ar.plW>=2||ar.aiW>=2||ar.round>4;
+    if(over && ar.plW>ar.aiW){
+      // Steal from AI's unused cards only
+      const unused=[...ar.ai.hand.keys()].filter(i=>!ar.ai.used.has(i));
+      const pool=unused.length?unused.map(i=>ar.ai.hand[i]):ar.ai.hand;
+      const s=pool[~~(Math.random()*pool.length)];
+      if(s){ const nc={...s,id:`stolen_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; }
+    }
+    ar.rr=rr; renderAI();
+  }, 900); // 0.9s delay for animation
+}
+
+// ════════════════════════════════
+// NETWORK BATTLE (PeerJS)
+// ════════════════════════════════
+function startBattle_net(){ S.ar.phase='net_lobby'; renderNetLobby(); }
+
+function renderNetLobby(){
+  aIn().innerHTML=`
+  <div style="text-align:center;padding:12px 0 10px">
+    <div style="font-size:14px;font-weight:800;margin-bottom:3px">連線對戰</div>
+    <div style="font-size:11px;color:var(--muted)">PeerJS P2P · 零設定</div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--accent);display:flex;align-items:center;gap:5px">${ICO.door} 建立房間</div>
+    <button class="btn btnp" style="width:100%" id="btn-host" onclick="netHost()">建立並生成房間碼</button>
+    <div id="host-area" style="display:none;margin-top:12px;text-align:center">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">分享房間碼給朋友</div>
+      <div id="rcode-disp" class="rcode"></div>
+      <button onclick="copyCode()" class="btn btns" style="margin-top:7px;font-size:12px;padding:7px 12px">${ICO.copy} 複製</button>
+      <div id="host-st" style="font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px">
+        ${ICO.spin} 等待對手連線…
+      </div>
+    </div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px">
+    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--accent2);display:flex;align-items:center;gap:5px">${ICO.enter} 加入房間</div>
+    <input type="text" class="rinput" id="jin" placeholder="輸入房間碼" maxlength="6">
+    <button class="btn" style="width:100%;margin-top:9px;background:var(--accent2);color:#fff;font-size:14px" onclick="netJoin()">加入</button>
+    <div id="join-st" style="font-size:12px;color:var(--muted);text-align:center;margin-top:7px;min-height:16px"></div>
+  </div>`;
+}
+
+function copyCode(){ if(S.ar.roomCode) navigator.clipboard.writeText(S.ar.roomCode).then(()=>toast('已複製！','ok')); }
+
+function netHost(){
+  const btn=document.getElementById('btn-host');
+  btn.disabled=true; btn.innerHTML=`${ICO.spin} 建立中…`;
+  const code=Math.random().toString(36).substring(2,8).toUpperCase();
+  S.ar.roomCode=code; S.ar.isHost=true;
+  let peer;
+  try{ peer=new Peer(code); }catch(e){ peer=new Peer(); }
+  S.ar.peer=peer;
+  peer.on('open',()=>{
+    const ha=document.getElementById('host-area');
+    const rd=document.getElementById('rcode-disp');
+    if(ha) ha.style.display='block';
+    if(rd) rd.textContent=code;
+  });
+  peer.on('connection',conn=>{
+    S.ar.conn=conn; setupConn(conn);
+    const hs=document.getElementById('host-st');
+    if(hs) hs.innerHTML=`<span style="color:var(--ok)">${ICO.check} 對手已連線，等待牌組交換…</span>`;
+    // Host sends deck — waits for opponent's deck via handleNet('start') before starting
+    setTimeout(()=>{ conn.send({type:'start',deck:S.ar.deck}); },300);
+    // Host will start battle when it receives opponent's 'start' message (in handleNet)
+  });
+  peer.on('error',e=>{ toast('建立房間失敗：'+e.type,'error'); });
+}
+
+function netJoin(){
+  const code=document.getElementById('jin').value.toUpperCase().trim();
+  if(code.length<4){ toast('請輸入正確房間碼','error'); return; }
+  const stEl=document.getElementById('join-st');
+  if(stEl) stEl.innerHTML=`<span style="display:flex;align-items:center;gap:5px;justify-content:center">${ICO.spin} 連線中…</span>`;
+  S.ar.roomCode=code; S.ar.isHost=false;
+  const peer=new Peer(); S.ar.peer=peer;
+  peer.on('open',()=>{
+    const conn=peer.connect(code); S.ar.conn=conn; setupConn(conn);
+    conn.on('open',()=>{
+      if(stEl) stEl.innerHTML=`<span style="color:var(--ok);display:flex;align-items:center;gap:5px;justify-content:center">${ICO.check} 已連線，交換牌組中…</span>`;
+      conn.send({type:'start',deck:S.ar.deck});
+    });
+  });
+  peer.on('error',()=>{
+    if(stEl) stEl.innerHTML=`<span style="color:var(--danger)">無法連線，請確認房間碼</span>`;
+  });
+}
+
+function setupConn(conn){
+  conn.on('data', d=>handleNet(d));
+  conn.on('close',()=>{ toast('對手斷線','error'); S.ar.phase='mode'; renderAMode(); });
+}
+
+function handleNet(data){
+  if(data.type==='start'){
+    // Both sides receive each other's deck via this message, then start
+    S.ar.no={hand:data.deck, used:new Set(), wins:0, sel:null, ready:false};
+    S.ar.np={hand:[...S.ar.deck], used:new Set(), wins:0, sel:null};
+    S.ar.netRound=1; S.ar.netRR=null; S.ar.netAnimating=false;
+    S.ar.phase='net_battle';
+    renderNet();
+  }
+  if(data.type==='play'){
+    S.ar.no.sel=data.idx; S.ar.no.ready=true;
+    if(S.ar.np.sel!==null) resolveNet(); // both played, resolve now
+    else renderNet(); // just show opponent is ready
+  }
+  if(data.type==='stolen'){ toast(`對手搶走了你的 ${data.word}！`,'error'); }
+}
+
+function renderNet(){
+  const ar=S.ar, np=ar.np, no=ar.no, r=ar.netRound;
+  if(np.wins>=2||no.wins>=2||r>3){
+    aIn().innerHTML = gameOverBlock(np.wins>no.wins, np.wins, no.wins, ar.netRR?.stolen, "startHM();goTab('hangman')", "aBack()");
+    return;
+  }
+  const isAnim = ar.netAnimating;
+  const opReady = no.ready; // opponent has played
+
+  // My hand — show cards face-up, used ones greyed
+  const myHandH = np.hand.map((c,i)=>{
+    const u=np.used.has(i), sel=np.sel===i;
+    return `<div class="hcard ${u?'used':''} ${sel?'sel':''}" onclick="playNet(${i})">${cardH(c,true)}</div>`;
+  }).join('');
+
+  // Opponent's hand — always face-down (backside), used ones gone
+  const opHandH = no.hand.map((_,i)=>{
+    if(no.used.has(i)) return ''; // used cards disappear
+    const isSelected = no.sel===i && isAnim; // only reveal during resolve
+    return `<div class="hcard" style="cursor:default">${isSelected ? cardH(no.hand[i],true) : cardBack()}</div>`;
+  }).join('');
+
+  const statusMsg = isAnim
+    ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 0">${ICO.spin} 交鋒中…</div>`
+    : np.sel!==null && !opReady
+    ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 0">${ICO.spin} 等待對手出牌…</div>`
+    : opReady && np.sel===null
+    ? `<div style="font-size:12px;color:#fbbf24;font-weight:700;text-align:center;padding:6px 0">對手已出牌，請選擇你的卡牌！</div>`
+    : '';
+
+  aIn().innerHTML=`
+  ${scoreHUD(np.wins, no.wins, r)}
+  ${ar.netRR ? rrBlock({...ar.netRR}, '你', '對手') : ''}
+
+  <!-- Opponent hand (face down) -->
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:5px">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      對手手牌 ${opReady ? '<span style="color:#fbbf24;font-size:10px">（已出牌）</span>' : ''}
+    </div>
+    <div class="hand-row" style="opacity:${isAnim?.6:1}">${opHandH}</div>
+  </div>
+
+  <!-- My hand -->
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;${isAnim?'opacity:.5;pointer-events:none':''}">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">
+      ${np.sel===null ? '選擇出戰卡牌' : `已選：${np.hand[np.sel]?.word}`}
+    </div>
+    <div class="hand-row">${myHandH}</div>
+  </div>
+
+  ${statusMsg}
+  <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px">
+    ${ICO.wifi} 房間碼：<strong style="color:var(--accent2)">${S.ar.roomCode}</strong>
+  </div>`;
+}
+
+function playNet(idx){
+  const np=S.ar.np; if(np.used.has(idx)||np.sel!==null||S.ar.netAnimating) return;
+  np.sel=idx;
+  S.ar.conn?.send({type:'play',idx});
+  if(S.ar.no.ready) resolveNet();
+  else renderNet();
+}
+
+function resolveNet(){
+  const ar=S.ar, np=ar.np, no=ar.no;
+  if(np.sel===null||!no.ready||ar.netAnimating) return;
+  ar.netAnimating=true; renderNet();
+
+  setTimeout(()=>{
+    const plC=np.hand[np.sel], opC=no.hand[no.sel];
+    if(!plC||!opC){ ar.netAnimating=false; return; }
+    const plDmg=opC.atk, opDmg=plC.atk;
+    const plR=plC.hp-plDmg, opR=opC.hp-opDmg;
+    const pw=plR>opR, draw=plR===opR;
+    np.used.add(np.sel); no.used.add(no.sel);
+    if(pw) np.wins++; else if(!draw) no.wins++;
+    const rr={round:ar.netRound, plC, opC, plDmg, opDmg, plR, opR, stolen:null};
+    ar.netRound++;
+    const pSel=np.sel; np.sel=null; no.ready=false; no.sel=null; ar.netAnimating=false;
+    const over=np.wins>=2||no.wins>=2||ar.netRound>4;
+    if(over && np.wins>no.wins){
+      const pool=[...no.used].map(i=>no.hand[i]).filter(Boolean);
+      const st=(pool.length?pool:no.hand)[~~(Math.random()*(pool.length||no.hand.length))];
+      if(st){ const nc={...st,id:`ns_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; ar.conn?.send({type:'stolen',word:st.word}); }
+    }
+    if(over && no.wins>np.wins){
+      const lost=np.hand[pSel];
+      if(lost){ S.cards=S.cards.filter(c=>c.id!==lost.id); save(); updHdr(); }
+    }
+    ar.netRR=rr; renderNet();
+  }, 900);
+}
+
+// ════════════════════════════════
+// KEYBOARD
+// ════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(S.tab!=='hangman') return;
+  if(S.hm.status==='playing' && /^[a-zA-Z]$/.test(e.key)) guess(e.key.toUpperCase());
+  if((S.hm.status==='won'||S.hm.status==='lost') && e.key==='Enter') startHM();
+});
+
+// ════════════════════════════════
+// INIT
+// ════════════════════════════════
+// Inject shake animation
+const _st=document.createElement('style');
+_st.textContent='@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}';
+document.head.appendChild(_st);
+
+function init(){
+  load(); updHdr();
+  if(S.unlockedLib) document.getElementById('nb-library').classList.remove('lk');
+  if(S.cards.length>=4) document.getElementById('nb-arena').classList.remove('lk');
+  setTimeout(()=>{
+    const sp=document.getElementById('splash');
+    sp.style.opacity='0';
+    setTimeout(()=>sp.remove(), 400);
+  }, 500);
+  startHM();
+}
+init();
+</script>
 </body>
 </html>
